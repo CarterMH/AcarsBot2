@@ -7,7 +7,8 @@
     "start": "node index.js",
     "dev": "node index.js",
     "deploy-commands": "node deploy-commands.js",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "build": "echo 'Cloudflare Worker - no build needed' && exit 0"
   },
   "keywords": [
     "discord",
