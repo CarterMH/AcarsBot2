@@ -43,11 +43,17 @@ npm install
    DISCORD_TOKEN=your_actual_bot_token_here
    CLIENT_ID=your_bot_client_id_here
    GUILD_ID=your_server_id_here
+   ADMIN_PASSWORD=your_secure_admin_password_here
+   ANNOUNCEMENT_CHANNEL_ID=your_announcement_channel_id_here
+   PORT=3000
    ```
    
    - **DISCORD_TOKEN**: Your bot's token (from Bot section)
    - **CLIENT_ID**: Your application's Client ID (from General Information)
    - **GUILD_ID**: (Optional) Your Discord server ID for faster command updates
+   - **ADMIN_PASSWORD**: Password for accessing the admin panel (change from default!)
+   - **ANNOUNCEMENT_CHANNEL_ID**: The Discord channel ID where announcements will be sent
+   - **PORT**: (Optional) Port for the web server (defaults to 3000)
 
 ### 5. Deploy Slash Commands
 
@@ -102,8 +108,46 @@ module.exports = {
 };
 ```
 
+## Admin Panel
+
+The bot includes a web-based admin panel for sending styled announcements to Discord.
+
+### Accessing the Admin Panel
+
+1. Start the bot (the web server starts automatically)
+2. Open your browser and navigate to `http://localhost:3000` (or your configured PORT)
+3. Enter your admin password (set in `.env` as `ADMIN_PASSWORD`)
+4. Fill in the announcement title and message
+5. Choose a color theme for the announcement
+6. Click "Send Announcement"
+
+### Features
+
+- **Styled Embeds**: Announcements are sent as Discord embeds with:
+  - Colored side bar (customizable color)
+  - Styled text box with title and description
+  - Timestamp and footer
+- **Live Preview**: See how your announcement will look before sending
+- **Color Themes**: Choose from 8 pre-defined color themes
+- **Secure**: Password-protected admin panel
+
+### Getting Your Channel ID
+
+To get your announcement channel ID:
+1. Enable Developer Mode in Discord (User Settings > Advanced > Developer Mode)
+2. Right-click on your announcement channel
+3. Click "Copy ID"
+4. Paste it into your `.env` file as `ANNOUNCEMENT_CHANNEL_ID`
+
+### Bot Permissions
+
+Make sure your bot has the following permissions in the announcement channel:
+- Send Messages
+- Embed Links
+
 ## Notes
 
 - Make sure your bot has the necessary permissions in your Discord server
 - The bot uses Discord.js v14 with slash commands
 - Commands are automatically loaded from the `commands/` directory
+- The web server runs on port 3000 by default (configurable via `PORT` in `.env`)
