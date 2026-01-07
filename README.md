@@ -45,15 +45,23 @@ npm install
    GUILD_ID=your_server_id_here
    ADMIN_PASSWORD=your_secure_admin_password_here
    ANNOUNCEMENT_CHANNEL_ID=your_announcement_channel_id_here
+   SUPABASE_URL=https://your-project.supabase.co
+   SUPABASE_ANON_KEY=your_supabase_anon_key_here
+   ALLOWED_ORIGINS=http://localhost:5173,https://yourwebsite.com
    PORT=3000
    ```
    
    - **DISCORD_TOKEN**: Your bot's token (from Bot section)
    - **CLIENT_ID**: Your application's Client ID (from General Information)
    - **GUILD_ID**: (Optional) Your Discord server ID for faster command updates
-   - **ADMIN_PASSWORD**: Password for accessing the admin panel (change from default!)
+   - **ADMIN_PASSWORD**: Password for fallback authentication (change from default!)
    - **ANNOUNCEMENT_CHANNEL_ID**: The Discord channel ID where announcements will be sent
+   - **SUPABASE_URL**: Your Supabase project URL (for website integration)
+   - **SUPABASE_ANON_KEY**: Your Supabase anon/public key (for website integration)
+   - **ALLOWED_ORIGINS**: Comma-separated list of allowed CORS origins (your website URLs)
    - **PORT**: (Optional) Port for the web server (defaults to 3000)
+
+**Note:** The `.env` file is gitignored for security. Never commit it to version control.
 
 ### 5. Deploy Slash Commands
 
@@ -145,9 +153,163 @@ Make sure your bot has the following permissions in the announcement channel:
 - Send Messages
 - Embed Links
 
+## Cloudflare Deployment
+
+**Important:** Discord bots require persistent WebSocket connections and cannot run on Cloudflare Workers. However, if you're deploying the API server separately, you can use Cloudflare Pages or another platform.
+
+### Setting Environment Variables in Cloudflare
+
+1. Go to your Cloudflare project dashboard
+2. Navigate to **Settings** > **Environment Variables**
+3. Add the following environment variables:
+
+   ```
+   DISCORD_TOKEN=your_discord_bot_token
+   CLIENT_ID=your_bot_client_id
+   ANNOUNCEMENT_CHANNEL_ID=your_channel_id
+   SUPABASE_URL=https://your-project.supabase.co
+   SUPABASE_ANON_KEY=your_supabase_anon_key
+   ALLOWED_ORIGINS=https://yourwebsite.com
+   ADMIN_PASSWORD=your_secure_password
+   PORT=3000
+   ```
+
+4. Make sure to set these for both **Production** and **Preview** environments if needed
+
+**Note:** The `.env` file is not used in Cloudflare - all environment variables must be set in the Cloudflare dashboard.
+
+## Website Integration
+
+The bot provides a REST API endpoint that your website can call to send announcements.
+
+### API Endpoint
+
+**URL:** `POST /api/announce`
+
+**Base URL:** Your bot server URL (e.g., `https://your-bot.railway.app` or your deployed URL)
+
+### Authentication
+
+The API supports Supabase JWT authentication. Send the Supabase session token in the Authorization header:
+
+```javascript
+// In your website code
+const { data: { session } } = await supabase.auth.getSession();
+const token = session?.access_token;
+
+const response = await fetch('https://your-bot-url/api/announce', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
+  },
+  body: JSON.stringify({
+    title: 'Announcement Title',
+    message: 'Your announcement message here',
+    color: '0x5865F2', // Optional: hex color code
+    channelId: '123456789012345678' // Optional: specific channel ID
+  })
+});
+
+const data = await response.json();
+if (data.success) {
+  console.log('Announcement sent!');
+}
+```
+
+### Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `title` | string | Yes | The announcement title |
+| `message` | string | Yes | The announcement message/description |
+| `color` | string | No | Hex color code (e.g., "0x5865F2"). Defaults to Discord blurple |
+| `channelId` | string | No | Specific Discord channel ID. Uses `ANNOUNCEMENT_CHANNEL_ID` from env if not provided |
+
+### Example: React Component
+
+```jsx
+import { useState } from 'react';
+import { supabase } from './supabaseClient';
+
+function AnnouncementForm() {
+  const [title, setTitle] = useState('');
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const BOT_API_URL = 'https://your-bot-url'; // Your bot's API URL
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch(`${BOT_API_URL}/api/announce`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ title, message })
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      
+      alert('Announcement sent!');
+      setTitle('');
+      setMessage('');
+    } catch (err) {
+      alert('Error: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input
+        type="text"
+        placeholder="Title"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        required
+      />
+      <textarea
+        placeholder="Message"
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        required
+      />
+      <button type="submit" disabled={loading}>
+        {loading ? 'Sending...' : 'Send Announcement'}
+      </button>
+    </form>
+  );
+}
+```
+
+### CORS Configuration
+
+Make sure to add your website URL to `ALLOWED_ORIGINS` in your environment variables:
+
+```env
+ALLOWED_ORIGINS=https://yourwebsite.com,https://www.yourwebsite.com
+```
+
+For Cloudflare, set this in the dashboard under Environment Variables.
+
 ## Notes
 
 - Make sure your bot has the necessary permissions in your Discord server
 - The bot uses Discord.js v14 with slash commands
 - Commands are automatically loaded from the `commands/` directory
 - The web server runs on port 3000 by default (configurable via `PORT` in `.env`)
+- The `.env` file is gitignored - never commit it to version control
+- For Cloudflare deployments, set all environment variables in the Cloudflare dashboard

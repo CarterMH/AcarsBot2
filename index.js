@@ -191,10 +191,30 @@ function startWebServer() {
 }
 
 // Login to Discord with your client's token
+// Check if we're in a build environment (Cloudflare, Vercel, etc.)
+const isBuildEnv = process.env.CI || process.env.CF_PAGES || process.env.VERCEL || process.env.NETLIFY;
 const token = process.env.DISCORD_TOKEN;
-if (!token) {
-    console.error('ERROR: DISCORD_TOKEN is not set in your .env file!');
-    process.exit(1);
-}
 
-client.login(token);
+if (!token) {
+    if (isBuildEnv) {
+        // During build, just warn - don't exit
+        console.warn('WARNING: DISCORD_TOKEN not set during build.');
+        console.warn('Make sure to set DISCORD_TOKEN in your deployment platform\'s environment variables.');
+        console.warn('For Cloudflare: Settings > Environment Variables');
+    } else {
+        // During actual runtime, exit if token is missing
+        console.error('ERROR: DISCORD_TOKEN is not set!');
+        console.error('Please set DISCORD_TOKEN in your environment variables.');
+        console.error('For local development: Add it to your .env file');
+        console.error('For Cloudflare: Set it in your Cloudflare dashboard under Environment Variables');
+        process.exit(1);
+    }
+} else {
+    // Only attempt login if we have a token and we're not just building
+    if (!isBuildEnv) {
+        client.login(token).catch(error => {
+            console.error('Failed to login to Discord:', error);
+            process.exit(1);
+        });
+    }
+}
