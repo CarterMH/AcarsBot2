@@ -153,30 +153,70 @@ Make sure your bot has the following permissions in the announcement channel:
 - Send Messages
 - Embed Links
 
-## Cloudflare Deployment
+## Deployment
 
-**Important:** Discord bots require persistent WebSocket connections and cannot run on Cloudflare Workers. However, if you're deploying the API server separately, you can use Cloudflare Pages or another platform.
+**⚠️ Important:** Discord bots **CANNOT** run on Cloudflare Workers or Cloudflare Pages because they require persistent WebSocket connections. Discord bots must run on platforms that support long-running processes.
 
-### Setting Environment Variables in Cloudflare
+### Recommended Deployment Platforms
 
-1. Go to your Cloudflare project dashboard
-2. Navigate to **Settings** > **Environment Variables**
-3. Add the following environment variables:
+#### Railway (Recommended)
+1. Go to [Railway](https://railway.app)
+2. Create a new project and connect your GitHub repo
+3. Add environment variables in the **Variables** tab:
+   - `DISCORD_TOKEN`
+   - `CLIENT_ID`
+   - `ANNOUNCEMENT_CHANNEL_ID`
+   - `SUPABASE_URL`
+   - `SUPABASE_ANON_KEY`
+   - `ALLOWED_ORIGINS`
+   - `ADMIN_PASSWORD`
+   - `PORT` (optional, defaults to 3000)
+4. Railway will automatically detect Node.js and deploy
 
+#### Render
+1. Go to [Render](https://render.com)
+2. Create a new **Web Service**
+3. Connect your GitHub repo
+4. Set build command: `npm install`
+5. Set start command: `npm start`
+6. Add environment variables in the **Environment** section
+
+#### Heroku
+1. Go to [Heroku](https://heroku.com)
+2. Create a new app
+3. Connect your GitHub repo
+4. Add environment variables via CLI or dashboard:
+   ```bash
+   heroku config:set DISCORD_TOKEN=your_token
+   heroku config:set CLIENT_ID=your_client_id
+   # ... etc
    ```
-   DISCORD_TOKEN=your_discord_bot_token
-   CLIENT_ID=your_bot_client_id
-   ANNOUNCEMENT_CHANNEL_ID=your_channel_id
-   SUPABASE_URL=https://your-project.supabase.co
-   SUPABASE_ANON_KEY=your_supabase_anon_key
-   ALLOWED_ORIGINS=https://yourwebsite.com
-   ADMIN_PASSWORD=your_secure_password
-   PORT=3000
-   ```
 
-4. Make sure to set these for both **Production** and **Preview** environments if needed
+#### VPS (DigitalOcean, AWS EC2, etc.)
+1. SSH into your server
+2. Clone your repository
+3. Install Node.js and npm
+4. Create a `.env` file with your credentials
+5. Install PM2: `npm install -g pm2`
+6. Start the bot: `pm2 start index.js --name acars-bot`
+7. Save PM2 config: `pm2 save`
 
-**Note:** The `.env` file is not used in Cloudflare - all environment variables must be set in the Cloudflare dashboard.
+### Environment Variables
+
+For all platforms, you'll need to set these environment variables:
+
+```
+DISCORD_TOKEN=your_discord_bot_token
+CLIENT_ID=your_bot_client_id
+ANNOUNCEMENT_CHANNEL_ID=your_channel_id
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your_supabase_anon_key
+ALLOWED_ORIGINS=https://yourwebsite.com
+ADMIN_PASSWORD=your_secure_password
+PORT=3000
+```
+
+**Note:** The `.env` file is gitignored for security. Set environment variables in your deployment platform's dashboard.
 
 ## Website Integration
 
