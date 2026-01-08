@@ -13,6 +13,9 @@ RUN npm ci --only=production
 # Copy application files
 COPY . .
 
+# Make entrypoint script executable
+RUN chmod +x docker-entrypoint.sh
+
 # Create a non-root user for security
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
@@ -31,5 +34,5 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000', (r) => {process.exit(r ? 0 : 1)}).on('error', () => process.exit(1))"
 
-# Start the bot
-CMD ["npm", "start"]
+# Use entrypoint script to deploy commands then start bot
+ENTRYPOINT ["./docker-entrypoint.sh"]
