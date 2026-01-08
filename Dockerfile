@@ -1,25 +1,13 @@
 # Use Node.js LTS version
 FROM node:20-alpine
 
-# Install build dependencies for canvas (native module)
-RUN apk add --no-cache \
-    python3 \
-    make \
-    g++ \
-    cairo-dev \
-    jpeg-dev \
-    pango-dev \
-    giflib-dev \
-    pixman-dev \
-    && rm -rf /var/cache/apk/*
-
 # Set working directory
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies (including canvas which needs to be built)
+# Install dependencies
 RUN npm ci --only=production
 
 # Copy application files

@@ -1,7 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const { createClient } = require('@supabase/supabase-js');
 const https = require('https');
-const { createCanvas, loadImage } = require('canvas');
 require('dotenv').config();
 
 /**
@@ -18,47 +17,10 @@ function getZoomForAltitude(altitude) {
 }
 
 /**
- * Draw an aircraft icon on a canvas at the specified position and rotation.
- */
-function drawAircraftIcon(ctx, x, y, heading = 0, size = 20) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate((heading * Math.PI) / 180); // Convert degrees to radians
-    
-    // Draw aircraft icon (simple triangle pointing up, rotated by heading)
-    ctx.fillStyle = '#FF0000'; // Red color
-    ctx.strokeStyle = '#FFFFFF'; // White outline
-    ctx.lineWidth = 2;
-    
-    ctx.beginPath();
-    // Aircraft shape: triangle pointing up (nose)
-    ctx.moveTo(0, -size / 2); // Nose
-    ctx.lineTo(-size / 3, size / 2); // Left wing tip
-    ctx.lineTo(0, size / 4); // Tail
-    ctx.lineTo(size / 3, size / 2); // Right wing tip
-    ctx.closePath();
-    
-    ctx.fill();
-    ctx.stroke();
-    
-    ctx.restore();
-}
-
-/**
- * Calculate pixel position within a tile from lat/lon coordinates.
- */
-function latLonToPixel(lat, lon, zoom, tileX, tileY) {
-    const n = Math.pow(2, zoom);
-    const pixelX = ((lon + 180) / 360) * n * 256 - tileX * 256;
-    const pixelY = ((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2) * n * 256 - tileY * 256;
-    return { x: pixelX, y: pixelY };
-}
-
-/**
  * Fetch a static map image using multiple free map tile services with fallbacks.
- * Overlays an aircraft icon at the exact location with orientation.
+ * Tries different services until one works.
  */
-async function fetchMapImage(latitude, longitude, altitude, callsign, heading = null) {
+async function fetchMapImage(latitude, longitude, altitude, callsign) {
     // Handle string/number conversion
     const latNum = latitude !== null && latitude !== undefined ? Number(latitude) : null;
     const lonNum = longitude !== null && longitude !== undefined ? Number(longitude) : null;
@@ -125,36 +87,6 @@ async function fetchMapImage(latitude, longitude, altitude, callsign, heading = 
             });
 
             console.log(`✅ Map tile fetched from ${service.name} (${buffer.length} bytes)`);
-            
-            // Overlay aircraft icon if we have coordinates
-            if (latNum !== null && lonNum !== null) {
-                try {
-                    // Load the tile image
-                    const tileImage = await loadImage(buffer);
-                    const canvas = createCanvas(256, 256);
-                    const ctx = canvas.getContext('2d');
-                    
-                    // Draw the tile
-                    ctx.drawImage(tileImage, 0, 0);
-                    
-                    // Calculate pixel position of aircraft within the tile
-                    const pixelPos = latLonToPixel(latNum, lonNum, zoom, tileX, tileY);
-                    
-                    // Draw aircraft icon at the exact position
-                    const aircraftHeading = heading !== null && !Number.isNaN(Number(heading)) ? Number(heading) : 0;
-                    drawAircraftIcon(ctx, pixelPos.x, pixelPos.y, aircraftHeading, 24);
-                    
-                    // Convert canvas to buffer
-                    const finalBuffer = canvas.toBuffer('image/png');
-                    console.log(`✅ Aircraft icon overlaid on map (heading: ${aircraftHeading}°)`);
-                    return finalBuffer;
-                } catch (error) {
-                    console.warn(`⚠️ Failed to overlay aircraft icon: ${error.message}, using plain tile`);
-                    // Return original tile if overlay fails
-                    return buffer;
-                }
-            }
-            
             return buffer;
         } catch (error) {
             console.warn(`⚠️ ${service.name} failed: ${error.message}`);
@@ -299,12 +231,7 @@ module.exports = {
                     
                     if (latitudeNum !== null && longitudeNum !== null) {
                         try {
-                            // Get heading/bearing from flight data (try multiple possible field names)
-                            const heading = flight.heading !== null && flight.heading !== undefined ? Number(flight.heading) :
-                                           (flight.bearing !== null && flight.bearing !== undefined ? Number(flight.bearing) :
-                                           (flight.course !== null && flight.course !== undefined ? Number(flight.course) : null));
-                            
-                            const mapBuffer = await fetchMapImage(latitudeNum, longitudeNum, altitudeNum, flight.callsign || 'Unknown', heading);
+                            const mapBuffer = await fetchMapImage(latitudeNum, longitudeNum, altitudeNum, flight.callsign || 'Unknown');
                             if (mapBuffer) {
                                 mapAttachment = new AttachmentBuilder(mapBuffer, { name: 'map.png' });
                                 embed.setImage('attachment://map.png');
