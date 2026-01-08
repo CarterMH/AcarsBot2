@@ -20,8 +20,6 @@ services:
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
       - PORT=${PORT:-3000}
-    env_file:
-      - .env
     networks:
       - acars-network
 
