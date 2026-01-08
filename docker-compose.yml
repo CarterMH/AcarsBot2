@@ -9,11 +9,18 @@ services:
     container_name: acarsbot2
     restart: unless-stopped
     ports:
-      - "3000:3000"
-    # IMPORTANT: Environment variables must be set in Portainer's UI, not here!
-    # When using Git repository mode, Portainer preserves env vars set in its UI.
-    # Go to: Stack → Editor → Environment Variables section
-    # DO NOT add environment variables here or Portainer will reset them on redeploy
+      - "${PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=production
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - CLIENT_ID=${CLIENT_ID}
+      - GUILD_ID=${GUILD_ID}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - ANNOUNCEMENT_CHANNEL_ID=${ANNOUNCEMENT_CHANNEL_ID}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
+      - PORT=${PORT:-3000}
     networks:
       - acars-network
 
