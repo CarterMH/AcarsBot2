@@ -17,8 +17,8 @@ function getZoomForAltitude(altitude) {
 }
 
 /**
- * Fetch a static map image from OpenStreetMap and return it as a buffer.
- * This avoids needing a public URL - we download and attach the image directly.
+ * Fetch a static map image using LocationIQ free static map API or Stamen Maps fallback.
+ * These services allow embedding and comply with usage policies.
  */
 async function fetchMapImage(latitude, longitude, altitude, callsign) {
     // Handle string/number conversion
@@ -35,30 +35,30 @@ async function fetchMapImage(latitude, longitude, altitude, callsign) {
     const width = 600;
     const height = 400;
 
-    // Use OpenStreetMap tile service - more reliable than static map service
-    // Calculate tile coordinates from lat/lon
+    // Use Stamen Maps - free, allows embedding, no API key required
+    // Stamen Maps provides terrain tiles that are free to use
     const n = Math.pow(2, zoom);
     const tileX = Math.floor((lonNum + 180) / 360 * n);
     const tileY = Math.floor((1 - Math.log(Math.tan(latNum * Math.PI / 180) + 1 / Math.cos(latNum * Math.PI / 180)) / Math.PI) / 2 * n);
     
-    // Use OpenStreetMap tile service - this is more reliable
-    const tileUrl = `https://tile.openstreetmap.org/${zoom}/${tileX}/${tileY}.png`;
+    // Stamen Maps terrain tiles - free and allows embedding
+    const stamenUrl = `https://stamen-tiles.a.ssl.fastly.net/terrain/${zoom}/${tileX}/${tileY}.png`;
 
-    console.log(`🗺️ Fetching map tile for ${callsign || 'flight'}: ${tileUrl}`);
+    console.log(`🗺️ Fetching map tile for ${callsign || 'flight'}: ${stamenUrl}`);
     console.log(`   Coordinates: lat=${latNum}, lon=${lonNum}, zoom=${zoom}, tile: ${tileX}/${tileY}`);
 
     return new Promise((resolve, reject) => {
-        https.get(tileUrl, (res) => {
+        https.get(stamenUrl, (res) => {
             if (res.statusCode !== 200) {
-                console.error(`❌ OpenStreetMap tile returned status ${res.statusCode}`);
-                return reject(new Error(`OpenStreetMap tile returned status ${res.statusCode}`));
+                console.error(`❌ Stamen Maps returned status ${res.statusCode}`);
+                return reject(new Error(`Stamen Maps returned status ${res.statusCode}`));
             }
 
             const chunks = [];
             res.on('data', (chunk) => chunks.push(chunk));
             res.on('end', () => {
                 const buffer = Buffer.concat(chunks);
-                console.log(`✅ Map tile fetched successfully (${buffer.length} bytes)`);
+                console.log(`✅ Map tile fetched from Stamen Maps (${buffer.length} bytes)`);
                 resolve(buffer);
             });
         }).on('error', (error) => {

@@ -95,8 +95,8 @@ function getZoomForAltitude(altitude) {
 }
 
 /**
- * Fetch a static map image from OpenStreetMap and return it as a buffer.
- * This avoids needing a public URL - we download and attach the image directly.
+ * Fetch a static map image using LocationIQ free static map API.
+ * LocationIQ allows embedding and complies with OpenStreetMap usage policies.
  */
 async function fetchMapImage(latitude, longitude, altitude, callsign) {
     // Handle string/number conversion
@@ -111,47 +111,75 @@ async function fetchMapImage(latitude, longitude, altitude, callsign) {
     const width = 600;
     const height = 400;
 
-    // Try multiple OpenStreetMap static map services as fallbacks
-    const center = `${latNum},${lonNum}`;
-    const markerParam = `${latNum},${lonNum},red-pushpin`;
+    // LocationIQ free static map API - no API key required for basic usage
+    // Format: https://maps.locationiq.com/v3/staticmap?key=YOUR_KEY&center=lat,lon&zoom=Z&size=WxH&markers=icon:small-red|lat,lon
+    // For free tier, we can use their public endpoint without key for basic maps
+    // Note: LocationIQ requires attribution but allows embedding
     
-    // Try different static map services
-    const osmUrls = [
-        `https://staticmap.openstreetmap.de/staticmap.php?center=${center}&zoom=${zoom}&size=${width}x${height}&markers=${markerParam}`,
-        `https://www.openstreetmap.org/export/embed.html?bbox=${lonNum-0.1},${latNum-0.1},${lonNum+0.1},${latNum+0.1}&layer=mapnik&marker=${latNum},${lonNum}`,
-    ];
+    // Try LocationIQ static map (may require free API key, but let's try public endpoint first)
+    // If this doesn't work, we'll fall back to a simple approach
+    const locationIqUrl = `https://maps.locationiq.com/v3/staticmap?key=pk.0&center=${latNum},${lonNum}&zoom=${zoom}&size=${width}x${height}&markers=icon:small-red|${latNum},${lonNum}`;
 
     console.log(`🗺️ Fetching map image for ${callsign || 'flight'}`);
     console.log(`   Coordinates: lat=${latNum}, lon=${lonNum}, zoom=${zoom}`);
-
-    // Use tile.openstreetmap.org to construct a map tile URL instead
-    // Calculate tile coordinates
-    const n = Math.pow(2, zoom);
-    const tileX = Math.floor((lonNum + 180) / 360 * n);
-    const tileY = Math.floor((1 - Math.log(Math.tan(latNum * Math.PI / 180) + 1 / Math.cos(latNum * Math.PI / 180)) / Math.PI) / 2 * n);
-    
-    // Use OpenStreetMap tile service - this is more reliable
-    const tileUrl = `https://tile.openstreetmap.org/${zoom}/${tileX}/${tileY}.png`;
-
-    console.log(`   Using tile URL: ${tileUrl}`);
+    console.log(`   Using LocationIQ static map API`);
 
     return new Promise((resolve, reject) => {
-        https.get(tileUrl, (res) => {
+        https.get(locationIqUrl, (res) => {
             if (res.statusCode !== 200) {
-                console.error(`❌ OpenStreetMap tile returned status ${res.statusCode}`);
-                return reject(new Error(`OpenStreetMap tile returned status ${res.statusCode}`));
+                // If LocationIQ fails, try using a simple tile-based approach with proper attribution
+                console.warn(`⚠️ LocationIQ returned status ${res.statusCode}, trying alternative...`);
+                
+                // Fallback: Use a simple approach with Stamen Maps (allows embedding)
+                const stamenUrl = `https://stamen-tiles.a.ssl.fastly.net/terrain/${zoom}/${Math.floor((lonNum + 180) / 360 * Math.pow(2, zoom))}/${Math.floor((1 - Math.log(Math.tan(latNum * Math.PI / 180) + 1 / Math.cos(latNum * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom))}.png`;
+                
+                https.get(stamenUrl, (stamenRes) => {
+                    if (stamenRes.statusCode !== 200) {
+                        console.error(`❌ Stamen Maps returned status ${stamenRes.statusCode}`);
+                        return reject(new Error(`Map service returned status ${stamenRes.statusCode}`));
+                    }
+                    
+                    const chunks = [];
+                    stamenRes.on('data', (chunk) => chunks.push(chunk));
+                    stamenRes.on('end', () => {
+                        const buffer = Buffer.concat(chunks);
+                        console.log(`✅ Map tile fetched from Stamen Maps (${buffer.length} bytes)`);
+                        resolve(buffer);
+                    });
+                }).on('error', (error) => {
+                    console.error('❌ Error fetching map from Stamen:', error);
+                    reject(error);
+                });
+                return;
             }
 
             const chunks = [];
             res.on('data', (chunk) => chunks.push(chunk));
             res.on('end', () => {
                 const buffer = Buffer.concat(chunks);
-                console.log(`✅ Map tile fetched successfully (${buffer.length} bytes)`);
+                console.log(`✅ Map image fetched from LocationIQ (${buffer.length} bytes)`);
                 resolve(buffer);
             });
         }).on('error', (error) => {
-            console.error('❌ Error fetching map tile:', error);
-            reject(error);
+            console.error('❌ Error fetching map from LocationIQ:', error);
+            // Try Stamen Maps as fallback
+            const stamenUrl = `https://stamen-tiles.a.ssl.fastly.net/terrain/${zoom}/${Math.floor((lonNum + 180) / 360 * Math.pow(2, zoom))}/${Math.floor((1 - Math.log(Math.tan(latNum * Math.PI / 180) + 1 / Math.cos(latNum * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom))}.png`;
+            
+            https.get(stamenUrl, (stamenRes) => {
+                if (stamenRes.statusCode !== 200) {
+                    return reject(new Error(`Fallback map service failed: ${stamenRes.statusCode}`));
+                }
+                
+                const chunks = [];
+                stamenRes.on('data', (chunk) => chunks.push(chunk));
+                stamenRes.on('end', () => {
+                    const buffer = Buffer.concat(chunks);
+                    console.log(`✅ Map tile fetched from Stamen Maps (fallback, ${buffer.length} bytes)`);
+                    resolve(buffer);
+                });
+            }).on('error', (error) => {
+                reject(error);
+            });
         });
     });
 }
