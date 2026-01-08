@@ -25,12 +25,18 @@ const rest = new REST().setToken(process.env.DISCORD_TOKEN);
     try {
         console.log(`Started refreshing ${commands.length} application (/) commands.`);
 
-        // Get client ID from environment or use guild-specific deployment
+        // Get client ID from environment
         const clientId = process.env.CLIENT_ID;
         
         if (!clientId) {
-            console.error('ERROR: CLIENT_ID is not set in your .env file!');
+            console.error('ERROR: CLIENT_ID is not set!');
             console.log('You can find your Client ID in the Discord Developer Portal under "General Information"');
+            process.exit(1);
+        }
+
+        // Check for Discord token
+        if (!process.env.DISCORD_TOKEN) {
+            console.error('ERROR: DISCORD_TOKEN is not set!');
             process.exit(1);
         }
 
@@ -53,7 +59,11 @@ const rest = new REST().setToken(process.env.DISCORD_TOKEN);
             console.log(`Successfully reloaded ${data.length} application (/) commands globally.`);
             console.log('Note: Global commands can take up to 1 hour to update in Discord.');
         }
+        
+        // Exit successfully
+        process.exit(0);
     } catch (error) {
-        console.error(error);
+        console.error('Error deploying commands:', error);
+        process.exit(1);
     }
 })();

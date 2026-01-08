@@ -1,5 +1,4 @@
 #!/bin/sh
-set -e
 
 echo "Deploying Discord slash commands..."
 if node deploy-commands.js; then
