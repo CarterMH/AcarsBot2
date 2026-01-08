@@ -56,16 +56,16 @@ client.once(Events.ClientReady, readyClient => {
     
     // Set up rotating bot status (ACARS / aviation themed, slightly comedic)
     const statuses = [
-        { name: 'COMPANY MSG: SLOW DOWN ✈️', type: ActivityType.Watching },
-        { name: 'COMPANY MSG: YOU’RE LATE ⏰', type: ActivityType.Watching },
-        { name: 'COMPANY MSG: WHERE’S THE PAPERWORK? 📑', type: ActivityType.Watching },
-        { name: 'ACARS: “ARE WE THERE YET?” 🧳', type: ActivityType.Listening },
-        { name: 'dispatch yelling about block times 📡', type: ActivityType.Listening },
-        { name: 'fuel numbers for the 5th time ⛽', type: ActivityType.Watching },
-        { name: 'last minute gate changes 🎫', type: ActivityType.Watching },
-        { name: 'late pushes like it’s normal 😅', type: ActivityType.Watching },
-        { name: 'company messages so you don’t have to 💼', type: ActivityType.Watching },
-        { name: 'your ETD slip away into the sunset 🌇', type: ActivityType.Watching },
+        { name: 'MSG: SLOW DOWN ✈️', type: ActivityType.Watching },
+        { name: 'MSG: YOU\'RE LATE ⏰', type: ActivityType.Watching },
+        { name: 'MSG: WHERE\'S THE PAPERWORK? 📑', type: ActivityType.Watching },
+        { name: 'MSG: ARE WE THERE YET? 🧳', type: ActivityType.Watching },
+        { name: 'MSG: BLOCK TIME 📡', type: ActivityType.Watching },
+        { name: 'MSG: FUEL NUMBERS ⛽', type: ActivityType.Watching },
+        { name: 'MSG: GATE CHANGE 🎫', type: ActivityType.Watching },
+        { name: 'MSG: LATE PUSH 😅', type: ActivityType.Watching },
+        { name: 'MSG: COMPANY UPDATE 💼', type: ActivityType.Watching },
+        { name: 'MSG: ETD SLIPPING 🌇', type: ActivityType.Watching },
     ];
     
     let statusIndex = 0;
