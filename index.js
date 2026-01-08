@@ -403,6 +403,16 @@ async function pollActiveFlights() {
             return;
         }
 
+        // Early return if there are no active flights - don't send any updates
+        if (data.length === 0) {
+            // Clean up any stale flight states if no flights are active
+            if (flightState.size > 0) {
+                console.log(`🧹 No active flights found, cleaning up ${flightState.size} stale flight states`);
+                flightState.clear();
+            }
+            return;
+        }
+
         // Track which flights we saw this poll, for cleanup
         const seenIds = new Set();
 
