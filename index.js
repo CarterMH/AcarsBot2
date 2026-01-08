@@ -95,19 +95,30 @@ function getZoomForAltitude(altitude) {
  * Uses an OpenStreetMap-based static map service (no API key required).
  */
 function buildFlightMapUrl(latitude, longitude, altitude, callsign) {
-    if (typeof latitude !== 'number' || typeof longitude !== 'number') return null;
+    // Handle string/number conversion
+    const latNum = latitude !== null && latitude !== undefined ? Number(latitude) : null;
+    const lonNum = longitude !== null && longitude !== undefined ? Number(longitude) : null;
+    
+    if (latNum === null || lonNum === null || Number.isNaN(latNum) || Number.isNaN(lonNum)) {
+        return null;
+    }
 
-    const zoom = getZoomForAltitude(altitude);
+    const zoom = getZoomForAltitude(altitude !== null && altitude !== undefined ? Number(altitude) : 0);
     const size = '600x400'; // width x height in pixels
 
-    // Using staticmap.openstreetmap.de - markers are specified as: lat,lon,color
-    // Example: &markers=51.5,7.4,red-pushpin
-    const markerColor = 'red-pushpin';
-    const markerParam = `${latitude},${longitude},${markerColor}`;
-
-    // Note: OSM static map service does not support custom labels in the image,
-    // but the callsign is already in the embed title.
-    return `https://staticmap.openstreetmap.de/staticmap.php?center=${latitude},${longitude}&zoom=${zoom}&size=${size}&markers=${markerParam}`;
+    // Using OpenStreetMap static map service
+    // Format: https://staticmap.openstreetmap.de/staticmap.php?center=lat,lon&zoom=Z&size=WxH&markers=lat,lon,color
+    const center = `${latNum},${lonNum}`;
+    const markerParam = `${latNum},${lonNum},red-pushpin`;
+    
+    // Build URL without encoding (coordinates are already numeric)
+    const mapUrl = `https://staticmap.openstreetmap.de/staticmap.php?center=${center}&zoom=${zoom}&size=${size}&markers=${markerParam}`;
+    
+    // Debug logging
+    console.log(`🗺️ Generated map URL for ${callsign || 'flight'}: ${mapUrl}`);
+    console.log(`   Coordinates: lat=${latNum}, lon=${lonNum}, zoom=${zoom}`);
+    
+    return mapUrl;
 }
 
 /**
@@ -128,6 +139,13 @@ function getVerticalSpeedFpm(currentRow, previousState, now) {
     const feetDelta = currentRow.altitude - previousState.altitude;
     const fpm = (feetDelta / dtSeconds) * 60;
     return Math.round(fpm);
+}
+
+/**
+ * Get a random embed color.
+ */
+function getRandomEmbedColor() {
+    return Math.floor(Math.random() * 0xFFFFFF);
 }
 
 /**
@@ -162,14 +180,13 @@ async function sendFlightStatusEmbed(type, flight, options = {}) {
     const longitude = typeof longitudeNum === 'number' && !Number.isNaN(longitudeNum) ? longitudeNum.toFixed(4) : null;
 
     let title = '';
-    let color = 0x5865F2; // default blurple
+    // Always use a random color for the embed sidebar
+    const color = getRandomEmbedColor();
 
     if (type === 'takeoff') {
         title = `🚀 Takeoff detected - ${callsign}`;
-        color = 0x57F287; // green
     } else if (type === 'landing') {
         title = `🛬 Landing detected - ${callsign}`;
-        color = 0xED4245; // red
     } else {
         title = `✈️ Flight update - ${callsign}`;
     }
@@ -209,13 +226,12 @@ async function sendFlightStatusEmbed(type, flight, options = {}) {
     }
 
     // Add a static map image if we have coordinates
-    const rawLat = latitudeNum;
-    const rawLon = longitudeNum;
-    const rawAlt = altitudeNum;
-
-    const mapUrl = buildFlightMapUrl(rawLat, rawLon, rawAlt, callsign);
+    const mapUrl = buildFlightMapUrl(latitudeNum, longitudeNum, altitudeNum, callsign);
     if (mapUrl) {
+        console.log(`✅ Adding map image to embed for ${callsign}: ${mapUrl}`);
         embed.setImage(mapUrl);
+    } else {
+        console.log(`❌ No map URL generated for ${callsign} - lat: ${latitudeNum}, lon: ${longitudeNum}`);
     }
 
     try {

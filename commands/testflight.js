@@ -20,19 +20,29 @@ function getZoomForAltitude(altitude) {
  * Uses OpenStreetMap static map service.
  */
 function buildFlightMapUrl(latitude, longitude, altitude, callsign) {
-    if (latitude === null || latitude === undefined || longitude === null || longitude === undefined) return null;
+    // Handle string/number conversion
+    const latNum = latitude !== null && latitude !== undefined ? Number(latitude) : null;
+    const lonNum = longitude !== null && longitude !== undefined ? Number(longitude) : null;
+    
+    if (latNum === null || lonNum === null || Number.isNaN(latNum) || Number.isNaN(lonNum)) {
+        console.log(`⚠️ Invalid coordinates for map: lat=${latitude}, lon=${longitude}`);
+        return null;
+    }
 
-    const latNum = Number(latitude);
-    const lonNum = Number(longitude);
     const altNum = altitude !== null && altitude !== undefined ? Number(altitude) : 0;
-
-    if (Number.isNaN(latNum) || Number.isNaN(lonNum)) return null;
-
-    const zoom = getZoomForAltitude(altitude);
+    const zoom = getZoomForAltitude(altNum);
     const size = '600x400';
-    const markerColor = 'red-pushpin';
-    const markerParam = `${latNum},${lonNum},${markerColor}`;
-    return `https://staticmap.openstreetmap.de/staticmap.php?center=${latNum},${lonNum}&zoom=${zoom}&size=${size}&markers=${markerParam}`;
+    const center = `${latNum},${lonNum}`;
+    const markerParam = `${latNum},${lonNum},red-pushpin`;
+    
+    // Build URL without encoding (coordinates are already numeric)
+    const mapUrl = `https://staticmap.openstreetmap.de/staticmap.php?center=${center}&zoom=${zoom}&size=${size}&markers=${markerParam}`;
+    
+    // Debug logging
+    console.log(`🗺️ Generated map URL for ${callsign || 'flight'}: ${mapUrl}`);
+    console.log(`   Coordinates: lat=${latNum}, lon=${lonNum}, zoom=${zoom}`);
+    
+    return mapUrl;
 }
 
 /**
@@ -56,7 +66,8 @@ function createFlightEmbed(flight) {
                               (typeof flight.vertical_speed === 'number' ? flight.vertical_speed : null);
 
     const title = `✈️ Flight update - ${callsign}`;
-    const color = 0x5865F2; // default blurple
+    // Random color for each test embed
+    const color = Math.floor(Math.random() * 0xFFFFFF);
 
     let description = `**Aircraft:** ${aircraft}\n**Route:** ${origin} ➝ ${destination}\n**Altitude:** ${altitude}`;
     if (altitudeAgl) {
@@ -94,7 +105,10 @@ function createFlightEmbed(flight) {
     // Add map if coordinates provided
     const mapUrl = buildFlightMapUrl(latitudeNum, longitudeNum, altitudeNum, callsign);
     if (mapUrl) {
+        console.log(`✅ Adding map image to embed for ${callsign}: ${mapUrl}`);
         embed.setImage(mapUrl);
+    } else {
+        console.log(`❌ No map URL generated for ${callsign} - lat: ${latitudeNum}, lon: ${longitudeNum}`);
     }
 
     return embed;
