@@ -20,8 +20,9 @@ module.exports = {
                 .setRequired(true))
         .addStringOption(option =>
             option.setName('color')
-                .setDescription('Color hex code (e.g., 5865F2) - optional, defaults to Discord blurple')
-                .setRequired(false))
+                .setDescription('Color for the announcement (select from list or enter hex code) - optional, defaults to Discord blurple')
+                .setRequired(false)
+                .setAutocomplete(true))
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
     async execute(interaction) {
         // Check if user has permission to manage messages
@@ -82,6 +83,61 @@ module.exports = {
             await interaction.editReply({ 
                 content: `❌ Failed to send announcement: ${error.message}` 
             });
+        }
+    },
+    async autocomplete(interaction) {
+        const focusedOption = interaction.options.getFocused(true);
+
+        if (focusedOption.name === 'color') {
+            const colors = [
+                { name: '🔵 Discord Blurple', value: '5865F2' },
+                { name: '🟢 Green', value: '57F287' },
+                { name: '🔴 Red', value: 'ED4245' },
+                { name: '🟡 Yellow', value: 'FEE75C' },
+                { name: '🟣 Purple', value: 'EB459E' },
+                { name: '⚫ White', value: 'FFFFFF' },
+                { name: '⚪ Light Gray', value: 'B9BBBE' },
+                { name: '🔵 Blue', value: '3498DB' },
+                { name: '🟠 Orange', value: 'E67E22' },
+                { name: '🔵 Cyan', value: '1ABC9C' },
+                { name: '🟢 Lime', value: '2ECC71' },
+                { name: '🔴 Dark Red', value: 'C0392B' },
+                { name: '🟣 Pink', value: 'E91E63' },
+                { name: '🟡 Gold', value: 'F1C40F' },
+                { name: '🔵 Navy', value: '34495E' },
+                { name: '🟢 Emerald', value: '10B981' },
+                { name: '🔴 Crimson', value: 'DC143C' },
+                { name: '🟣 Lavender', value: '9B59B6' },
+                { name: '🟡 Amber', value: 'FFBF00' },
+                { name: '🔵 Sky Blue', value: '87CEEB' },
+                { name: '🟢 Mint', value: '98FB98' },
+                { name: '🔴 Rose', value: 'FF69B4' },
+                { name: '🟣 Magenta', value: 'FF00FF' },
+                { name: '⚫ Black', value: '000000' },
+                { name: '⚪ Silver', value: 'C0C0C0' },
+            ];
+
+            const searchTerm = focusedOption.value.toLowerCase();
+            let filtered = colors.filter(color => 
+                color.name.toLowerCase().includes(searchTerm) ||
+                color.value.toLowerCase().includes(searchTerm)
+            );
+
+            // If user is typing a hex code, try to match it or add it as an option
+            if (searchTerm && /^[0-9a-f]{0,6}$/i.test(searchTerm)) {
+                // Check if it's a valid hex code that's not already in the list
+                const isCustomHex = !colors.some(c => c.value.toLowerCase() === searchTerm);
+                if (isCustomHex && searchTerm.length >= 3) {
+                    filtered.unshift({ name: `🎨 Custom: #${searchTerm.toUpperCase()}`, value: searchTerm.toUpperCase() });
+                }
+            }
+
+            // Limit to 25 options (Discord's limit)
+            filtered = filtered.slice(0, 25);
+
+            await interaction.respond(
+                filtered.map(color => ({ name: color.name, value: color.value }))
+            );
         }
     },
 };

@@ -49,8 +49,28 @@ client.once(Events.ClientReady, readyClient => {
     startWebServer();
 });
 
-// Handle slash commands
+// Handle slash commands and autocomplete
 client.on(Events.InteractionCreate, async interaction => {
+    // Handle autocomplete interactions
+    if (interaction.isAutocomplete()) {
+        const command = client.commands.get(interaction.commandName);
+
+        if (!command) {
+            console.error(`No command matching ${interaction.commandName} was found for autocomplete.`);
+            return;
+        }
+
+        try {
+            if (command.autocomplete) {
+                await command.autocomplete(interaction);
+            }
+        } catch (error) {
+            console.error(`Error handling autocomplete for ${interaction.commandName}:`, error);
+        }
+        return;
+    }
+
+    // Handle chat input commands
     if (!interaction.isChatInputCommand()) return;
 
     const command = client.commands.get(interaction.commandName);
