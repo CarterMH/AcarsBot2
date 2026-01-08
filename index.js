@@ -45,6 +45,10 @@ let announcementService = null;
 client.once(Events.ClientReady, readyClient => {
     console.log(`Ready! Logged in as ${readyClient.user.tag}`);
     console.log(`ACARS bot is now online!`);
+    
+    // Set bot status
+    readyClient.user.setActivity('COMPANY MSG', { type: 'WATCHING' });
+    
     announcementService = new AnnouncementService(client);
     startWebServer();
 });
