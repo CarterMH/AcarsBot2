@@ -10,6 +10,10 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
+    # IMPORTANT: Environment variables must be set in Portainer's UI, not here!
+    # When using Git repository mode, Portainer preserves env vars set in its UI.
+    # Go to: Stack → Editor → Environment Variables section
+    # DO NOT add environment variables here or Portainer will reset them on redeploy
     networks:
       - acars-network
 
