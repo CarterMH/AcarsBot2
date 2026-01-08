@@ -9,6 +9,18 @@ const AnnouncementService = require('./services/announcementService');
 const QuoteService = require('./services/quoteService');
 require('dotenv').config();
 
+// Supabase configuration for bot-side features (flight status, etc.)
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+let supabaseClient = null;
+
+if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+    supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log('Supabase client for bot features enabled');
+} else {
+    console.log('Supabase URL or ANON key missing - flight status features disabled');
+}
+
 // Create a new client instance
 const client = new Client({
     intents: [
@@ -45,6 +57,210 @@ let announcementService = null;
 let quoteService = null;
 let statusRotationInterval = null;
 let quoteInterval = null;
+let flightStatusInterval = null;
+
+// In-memory tracking of flight state to detect events (takeoff/landing, etc.)
+const flightState = new Map();
+
+const FLIGHT_STATUS_CHANNEL_ID = process.env.FLIGHT_STATUS_CHANNEL_ID || '1458721716002881789';
+const FLIGHT_POLL_INTERVAL_MS = Number(process.env.FLIGHT_POLL_INTERVAL_MS || 15000);
+
+/**
+ * Determine a simple flight phase from altitude.
+ * @param {number|null|undefined} altitude
+ * @returns {'ground'|'airborne'}
+ */
+function getPhaseFromAltitude(altitude) {
+    const alt = typeof altitude === 'number' ? altitude : 0;
+    // Below ~500 ft considered ground, above that airborne
+    return alt > 500 ? 'airborne' : 'ground';
+}
+
+/**
+ * Get vertical speed in FPM either from row data or calculating from previous sample.
+ */
+function getVerticalSpeedFpm(currentRow, previousState, now) {
+    // Prefer explicit vertical speed fields if present
+    if (typeof currentRow.vertical_speed_fpm === 'number') return currentRow.vertical_speed_fpm;
+    if (typeof currentRow.vertical_speed === 'number') return currentRow.vertical_speed;
+
+    if (!previousState || typeof currentRow.altitude !== 'number' || typeof previousState.altitude !== 'number') {
+        return null;
+    }
+
+    const dtSeconds = (now - previousState.timestamp) / 1000;
+    if (!dtSeconds || dtSeconds <= 0) return null;
+
+    const feetDelta = currentRow.altitude - previousState.altitude;
+    const fpm = (feetDelta / dtSeconds) * 60;
+    return Math.round(fpm);
+}
+
+/**
+ * Send a nicely formatted embed to the flight status channel.
+ */
+async function sendFlightStatusEmbed(type, flight, options = {}) {
+    const channelId = FLIGHT_STATUS_CHANNEL_ID;
+    const channel = client.channels.cache.get(channelId);
+
+    if (!channel) {
+        console.error(`❌ Flight status channel ${channelId} not found. Make sure the bot has access to this channel.`);
+        return;
+    }
+
+    const {
+        verticalSpeedFpm = null,
+        extraDescription = '',
+    } = options;
+
+    const callsign = flight.callsign || 'Unknown';
+    const aircraft = flight.aircraft_type || flight.aircraft || 'Unknown';
+    const origin = flight.origin || 'Unknown';
+    const destination = flight.destination || 'Unknown';
+    const altitude = typeof flight.altitude === 'number' ? `${flight.altitude.toFixed(0)} ft` : 'N/A';
+    const altitudeAgl = typeof flight.altitude_agl === 'number' ? `${flight.altitude_agl.toFixed(0)} ft` : null;
+    const latitude = typeof flight.latitude === 'number' ? flight.latitude.toFixed(4) : null;
+    const longitude = typeof flight.longitude === 'number' ? flight.longitude.toFixed(4) : null;
+
+    let title = '';
+    let color = 0x5865F2; // default blurple
+
+    if (type === 'takeoff') {
+        title = `🚀 Takeoff detected - ${callsign}`;
+        color = 0x57F287; // green
+    } else if (type === 'landing') {
+        title = `🛬 Landing detected - ${callsign}`;
+        color = 0xED4245; // red
+    } else {
+        title = `✈️ Flight update - ${callsign}`;
+    }
+
+    let description = `**Aircraft:** ${aircraft}\n**Route:** ${origin} ➝ ${destination}\n**Altitude:** ${altitude}`;
+    if (altitudeAgl) {
+        description += ` (${altitudeAgl} AGL)`;
+    }
+
+    if (verticalSpeedFpm !== null && !Number.isNaN(verticalSpeedFpm)) {
+        description += `\n**Vertical Speed:** ${verticalSpeedFpm} fpm`;
+    }
+
+    if (latitude !== null && longitude !== null) {
+        description += `\n**Position:** ${latitude}, ${longitude}`;
+    }
+
+    if (extraDescription) {
+        description += `\n${extraDescription}`;
+    }
+
+    // Include any engine-related info if available in the row
+    const engineInfoParts = [];
+    if (flight.engine_type) engineInfoParts.push(`Type: ${flight.engine_type}`);
+    if (flight.engine_model) engineInfoParts.push(`Model: ${flight.engine_model}`);
+    if (flight.engine_count) engineInfoParts.push(`Count: ${flight.engine_count}`);
+    if (flight.engines) engineInfoParts.push(`Info: ${flight.engines}`);
+
+    const embed = new EmbedBuilder()
+        .setTitle(title)
+        .setDescription(description)
+        .setColor(color)
+        .setTimestamp();
+
+    if (engineInfoParts.length > 0) {
+        embed.addFields({ name: 'Engine Info', value: engineInfoParts.join('\n') });
+    }
+
+    try {
+        await channel.send({ embeds: [embed] });
+    } catch (err) {
+        console.error('❌ Failed to send flight status embed:', err);
+    }
+}
+
+/**
+ * Poll Supabase for active flights and emit events for takeoff/landing.
+ */
+async function pollActiveFlights() {
+    if (!supabaseClient || !FLIGHT_STATUS_CHANNEL_ID) {
+        return;
+    }
+
+    const now = Date.now();
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('active_flights')
+            .select('*');
+
+        if (error) {
+            console.error('❌ Error fetching active flights from Supabase:', error.message);
+            return;
+        }
+
+        if (!Array.isArray(data)) {
+            return;
+        }
+
+        // Track which flights we saw this poll, for cleanup
+        const seenIds = new Set();
+
+        for (const flight of data) {
+            const id = flight.id || flight.uuid || flight.callsign;
+            if (!id) continue;
+
+            seenIds.add(id);
+
+            const prev = flightState.get(id);
+            const currentPhase = getPhaseFromAltitude(flight.altitude);
+            const vsFpm = getVerticalSpeedFpm(flight, prev, now);
+
+            // First time we see this flight - just store state, and optionally send a "tracking" message
+            if (!prev) {
+                flightState.set(id, {
+                    altitude: typeof flight.altitude === 'number' ? flight.altitude : null,
+                    phase: currentPhase,
+                    timestamp: now,
+                });
+
+                // Optional: send an initial flight tracking message
+                await sendFlightStatusEmbed('update', flight, {
+                    verticalSpeedFpm: vsFpm,
+                    extraDescription: '**Status:** Flight entered active tracking.',
+                });
+
+                continue;
+            }
+
+            // Detect phase transitions
+            if (prev.phase === 'ground' && currentPhase === 'airborne') {
+                await sendFlightStatusEmbed('takeoff', flight, {
+                    verticalSpeedFpm: vsFpm,
+                    extraDescription: '**Event:** Takeoff detected.',
+                });
+            } else if (prev.phase === 'airborne' && currentPhase === 'ground') {
+                await sendFlightStatusEmbed('landing', flight, {
+                    verticalSpeedFpm: vsFpm,
+                    extraDescription: '**Event:** Landing detected.',
+                });
+            }
+
+            // Update stored state
+            flightState.set(id, {
+                altitude: typeof flight.altitude === 'number' ? flight.altitude : prev.altitude,
+                phase: currentPhase,
+                timestamp: now,
+            });
+        }
+
+        // Clean up flights that are no longer active
+        for (const id of flightState.keys()) {
+            if (!seenIds.has(id)) {
+                flightState.delete(id);
+            }
+        }
+    } catch (err) {
+        console.error('❌ Unexpected error while polling active flights:', err);
+    }
+}
 
 // When the client is ready, run this code
 client.once(Events.ClientReady, readyClient => {
@@ -111,7 +327,15 @@ client.once(Events.ClientReady, readyClient => {
         sendQuote();
         scheduleNextQuote();
     }, 30000);
-    
+
+    // Start Supabase-driven flight status updates
+    if (supabaseClient && FLIGHT_STATUS_CHANNEL_ID) {
+        console.log(`Starting flight status polling every ${FLIGHT_POLL_INTERVAL_MS} ms for channel ${FLIGHT_STATUS_CHANNEL_ID}`);
+        flightStatusInterval = setInterval(pollActiveFlights, FLIGHT_POLL_INTERVAL_MS);
+    } else {
+        console.log('Flight status polling not started (missing Supabase client or channel ID)');
+    }
+
     startWebServer();
 });
 
@@ -218,6 +442,7 @@ process.on('SIGINT', () => {
     console.log('Shutting down...');
     if (statusRotationInterval) clearInterval(statusRotationInterval);
     if (quoteInterval) clearTimeout(quoteInterval);
+    if (flightStatusInterval) clearInterval(flightStatusInterval);
     process.exit(0);
 });
 
@@ -225,6 +450,7 @@ process.on('SIGTERM', () => {
     console.log('Shutting down...');
     if (statusRotationInterval) clearInterval(statusRotationInterval);
     if (quoteInterval) clearTimeout(quoteInterval);
+    if (flightStatusInterval) clearInterval(flightStatusInterval);
     process.exit(0);
 });
 
