@@ -59,28 +59,28 @@ class QuoteService {
     }
 
     /**
-     * Send an inspirational quote to a channel
-     * @param {string} channelId - The Discord channel ID
+     * Send an inspirational quote to a user via DM
+     * @param {string} userId - The Discord user ID
      * @returns {Promise<Object>} The sent message
      */
-    async sendQuote(channelId) {
+    async sendQuote(userId) {
         const quote = this.getRandomQuote();
         const [quoteText, author] = quote.split(' - ');
 
-        // Get the channel - try cache first, then fetch if not found
-        let channel = this.client.channels.cache.get(channelId);
-        if (!channel) {
+        // Get the user - try cache first, then fetch if not found
+        let user = this.client.users.cache.get(userId);
+        if (!user) {
             try {
-                channel = await this.client.channels.fetch(channelId);
-                console.log(`Fetched channel ${channelId} from Discord API`);
+                user = await this.client.users.fetch(userId);
+                console.log(`Fetched user ${userId} from Discord API`);
             } catch (fetchError) {
-                throw new Error(`Channel with ID ${channelId} not found or not accessible: ${fetchError.message}`);
+                throw new Error(`User with ID ${userId} not found or not accessible: ${fetchError.message}`);
             }
         }
 
-        // Verify channel is text-based
-        if (!channel.isTextBased()) {
-            throw new Error(`Channel ${channelId} is not a text channel`);
+        // Check if trying to DM a bot
+        if (user.bot) {
+            throw new Error(`Cannot send DMs to bots`);
         }
 
         // Create embed with styled quote
@@ -91,14 +91,18 @@ class QuoteService {
             .setFooter({ text: author || 'Unknown' })
             .setTimestamp();
 
-        // Send the quote
+        // Send the quote via DM
         try {
-            const sentMessage = await channel.send({ embeds: [embed] });
-            console.log(`✅ Inspirational quote sent to channel ${channelId} (${channel.name || 'Unknown'})`);
+            const sentMessage = await user.send({ embeds: [embed] });
+            console.log(`✅ Inspirational quote sent to user ${userId} (${user.tag || 'Unknown'})`);
             return sentMessage;
         } catch (sendError) {
-            console.error(`Failed to send quote to channel ${channelId}:`, sendError);
-            throw new Error(`Failed to send message to channel: ${sendError.message}`);
+            // Common error: User has DMs disabled
+            if (sendError.code === 50007) {
+                throw new Error(`Cannot send DM to ${user.tag}. They may have DMs disabled or the bot blocked.`);
+            }
+            console.error(`Failed to send quote to user ${userId}:`, sendError);
+            throw new Error(`Failed to send DM: ${sendError.message}`);
         }
     }
 }

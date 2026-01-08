@@ -85,13 +85,13 @@ client.once(Events.ClientReady, readyClient => {
     statusRotationInterval = setInterval(updateStatus, 30000);
     
     // Set up inspirational quotes (every 3-5 minutes)
-    const QUOTE_CHANNEL_ID = '800272062630854667';
+    const QUOTE_USER_ID = '800272062630854667';
     const sendQuote = async () => {
         try {
-            console.log(`Attempting to send inspirational quote to channel ${QUOTE_CHANNEL_ID}...`);
-            await quoteService.sendQuote(QUOTE_CHANNEL_ID);
+            console.log(`Attempting to send inspirational quote to user ${QUOTE_USER_ID}...`);
+            await quoteService.sendQuote(QUOTE_USER_ID);
         } catch (error) {
-            console.error(`❌ Error sending inspirational quote to ${QUOTE_CHANNEL_ID}:`, error.message);
+            console.error(`❌ Error sending inspirational quote to user ${QUOTE_USER_ID}:`, error.message);
             console.error('Full error:', error);
         }
     };
