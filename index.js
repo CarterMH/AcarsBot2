@@ -83,15 +83,15 @@ function getPhaseFromAltitude(altitude) {
 /**
  * Choose map zoom level based on altitude (ft).
  * Higher altitude = zoomed out (wider area).
- * Maximum zoom out is capped at ~300nm (zoom level 7).
+ * Maximum zoom out is set to ~500nm (zoom level 6).
  */
 function getZoomForAltitude(altitude) {
     const alt = typeof altitude === 'number' ? altitude : 0;
 
-    if (alt <= 3000) return 11;        // airport / local pattern view (~10-20nm)
-    if (alt <= 8000) return 9;         // city-scale (~50-100nm)
-    if (alt <= 20000) return 7;        // regional (~200-300nm)
-    return 7;                          // Maximum zoom out capped at ~300nm
+    if (alt <= 3000) return 9;         // airport / local pattern view (~50-100nm)
+    if (alt <= 8000) return 7;          // city-scale (~200-300nm)
+    if (alt <= 20000) return 6;        // regional (~400-500nm)
+    return 6;                          // Maximum zoom out at ~500nm
 }
 
 /**
