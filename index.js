@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, Collection, Events } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, Events, ActivityType } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
@@ -47,7 +47,13 @@ client.once(Events.ClientReady, readyClient => {
     console.log(`ACARS bot is now online!`);
     
     // Set bot status
-    readyClient.user.setActivity('COMPANY MSG', { type: 'WATCHING' });
+    client.user.setPresence({
+        activities: [{
+            name: 'COMPANY MSG',
+            type: ActivityType.Watching
+        }],
+        status: 'online'
+    });
     
     announcementService = new AnnouncementService(client);
     startWebServer();
