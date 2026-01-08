@@ -17,7 +17,7 @@ function getZoomForAltitude(altitude) {
 
 /**
  * Build a static map URL centered on the aircraft with an airline-style marker.
- * Uses OpenStreetMap static map service.
+ * Uses OpenStreetMap static map service that returns a direct PNG image.
  */
 function buildFlightMapUrl(latitude, longitude, altitude, callsign) {
     // Handle string/number conversion
@@ -31,15 +31,18 @@ function buildFlightMapUrl(latitude, longitude, altitude, callsign) {
 
     const altNum = altitude !== null && altitude !== undefined ? Number(altitude) : 0;
     const zoom = getZoomForAltitude(altNum);
-    const size = '600x400';
-    const center = `${latNum},${lonNum}`;
-    const markerParam = `${latNum},${lonNum},red-pushpin`;
+    const width = 600;
+    const height = 400;
     
-    // Build URL without encoding (coordinates are already numeric)
-    const mapUrl = `https://staticmap.openstreetmap.de/staticmap.php?center=${center}&zoom=${zoom}&size=${size}&markers=${markerParam}`;
+    // Use proxy endpoint if available, otherwise fallback to direct URL
+    const PORT = process.env.PORT || 3000;
+    const MAP_PROXY_BASE_URL = process.env.MAP_PROXY_BASE_URL || `http://localhost:${PORT}`;
+    
+    // Build proxy URL - our server will fetch the OpenStreetMap image and serve it as PNG
+    const mapUrl = `${MAP_PROXY_BASE_URL}/api/map?lat=${latNum}&lon=${lonNum}&zoom=${zoom}&width=${width}&height=${height}`;
     
     // Debug logging
-    console.log(`🗺️ Generated map URL for ${callsign || 'flight'}: ${mapUrl}`);
+    console.log(`🗺️ Generated map proxy URL for ${callsign || 'flight'}: ${mapUrl}`);
     console.log(`   Coordinates: lat=${latNum}, lon=${lonNum}, zoom=${zoom}`);
     
     return mapUrl;

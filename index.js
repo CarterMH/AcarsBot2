@@ -4,6 +4,7 @@ const path = require('path');
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
+const https = require('https');
 const { createClient } = require('@supabase/supabase-js');
 const AnnouncementService = require('./services/announcementService');
 const QuoteService = require('./services/quoteService');
@@ -13,6 +14,9 @@ require('dotenv').config();
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 let supabaseClient = null;
+
+// Store the server URL for map proxy (will be set when server starts)
+let MAP_PROXY_BASE_URL = null;
 
 if (SUPABASE_URL && SUPABASE_ANON_KEY) {
     supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -92,7 +96,7 @@ function getZoomForAltitude(altitude) {
 
 /**
  * Build a static map URL centered on the aircraft with an airline-style marker.
- * Uses an OpenStreetMap-based static map service (no API key required).
+ * Uses a static map service that returns direct PNG images compatible with Discord embeds.
  */
 function buildFlightMapUrl(latitude, longitude, altitude, callsign) {
     // Handle string/number conversion
@@ -104,18 +108,23 @@ function buildFlightMapUrl(latitude, longitude, altitude, callsign) {
     }
 
     const zoom = getZoomForAltitude(altitude !== null && altitude !== undefined ? Number(altitude) : 0);
-    const size = '600x400'; // width x height in pixels
+    const width = 600;
+    const height = 400;
 
-    // Using OpenStreetMap static map service
-    // Format: https://staticmap.openstreetmap.de/staticmap.php?center=lat,lon&zoom=Z&size=WxH&markers=lat,lon,color
-    const center = `${latNum},${lonNum}`;
-    const markerParam = `${latNum},${lonNum},red-pushpin`;
+    // Use our proxy endpoint to serve the map as a direct PNG image
+    // This ensures Discord can embed it properly
+    if (!MAP_PROXY_BASE_URL) {
+        // Fallback to direct URL if proxy not available (shouldn't happen in normal operation)
+        const center = `${latNum},${lonNum}`;
+        const markerParam = `${latNum},${lonNum},red-pushpin`;
+        return `https://staticmap.openstreetmap.de/staticmap.php?center=${center}&zoom=${zoom}&size=${width}x${height}&markers=${markerParam}`;
+    }
     
-    // Build URL without encoding (coordinates are already numeric)
-    const mapUrl = `https://staticmap.openstreetmap.de/staticmap.php?center=${center}&zoom=${zoom}&size=${size}&markers=${markerParam}`;
+    // Build proxy URL - our server will fetch the OpenStreetMap image and serve it as PNG
+    const mapUrl = `${MAP_PROXY_BASE_URL}/api/map?lat=${latNum}&lon=${lonNum}&zoom=${zoom}&width=${width}&height=${height}`;
     
     // Debug logging
-    console.log(`🗺️ Generated map URL for ${callsign || 'flight'}: ${mapUrl}`);
+    console.log(`🗺️ Generated map proxy URL for ${callsign || 'flight'}: ${mapUrl}`);
     console.log(`   Coordinates: lat=${latNum}, lon=${lonNum}, zoom=${zoom}`);
     
     return mapUrl;
@@ -551,6 +560,46 @@ function startWebServer() {
     }));
     app.use(bodyParser.json());
 
+    // Map proxy endpoint - fetches OpenStreetMap static map and serves as PNG for Discord embeds
+    app.get('/api/map', async (req, res) => {
+        try {
+            const { lat, lon, zoom, width = 600, height = 400 } = req.query;
+            
+            if (!lat || !lon || !zoom) {
+                return res.status(400).json({ error: 'Missing required parameters: lat, lon, zoom' });
+            }
+
+            const latNum = Number(lat);
+            const lonNum = Number(lon);
+            const zoomNum = Number(zoom);
+
+            if (Number.isNaN(latNum) || Number.isNaN(lonNum) || Number.isNaN(zoomNum)) {
+                return res.status(400).json({ error: 'Invalid coordinates or zoom' });
+            }
+
+            // Build OpenStreetMap static map URL
+            const center = `${latNum},${lonNum}`;
+            const markerParam = `${latNum},${lonNum},red-pushpin`;
+            const osmUrl = `https://staticmap.openstreetmap.de/staticmap.php?center=${center}&zoom=${zoomNum}&size=${width}x${height}&markers=${markerParam}`;
+
+            // Fetch the image from OpenStreetMap
+            https.get(osmUrl, (osmRes) => {
+                // Set proper headers for Discord embed
+                res.setHeader('Content-Type', 'image/png');
+                res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+                
+                // Pipe the image data to the response
+                osmRes.pipe(res);
+            }).on('error', (error) => {
+                console.error('Error fetching map from OpenStreetMap:', error);
+                res.status(500).json({ error: 'Failed to fetch map image' });
+            });
+        } catch (error) {
+            console.error('Error in map proxy:', error);
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    });
+
     // Helper function to verify Supabase JWT
     async function verifySupabaseAuth(authHeader) {
         if (!supabase) {
@@ -618,7 +667,11 @@ function startWebServer() {
     });
 
     app.listen(PORT, () => {
+        // Set the map proxy base URL for use in buildFlightMapUrl
+        MAP_PROXY_BASE_URL = process.env.MAP_PROXY_BASE_URL || `http://localhost:${PORT}`;
+        
         console.log(`API server running on http://localhost:${PORT}`);
+        console.log(`🗺️ Map proxy endpoint available at: ${MAP_PROXY_BASE_URL}/api/map`);
         if (supabase) {
             console.log(`Supabase integration enabled - API ready for website integration`);
         }
