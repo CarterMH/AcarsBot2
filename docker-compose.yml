@@ -8,18 +8,7 @@ services:
     container_name: acars-discord-bot
     restart: unless-stopped
     ports:
-      - "${PORT:-3000}:3000"
-    environment:
-      - NODE_ENV=production
-      - DISCORD_TOKEN=MTQ1ODM2MDYwMTA2Njg2ODg3OA.GLJQNn.TNQboH34NrZVnGHdeMKdA1q5yuasvM06H4zYFM
-      - CLIENT_ID=1458360601066868878
-      - GUILD_ID=1458360601066868878
-      - ADMIN_PASSWORD=password
-      - ANNOUNCEMENT_CHANNEL_ID=1458360601066868878
-      - SUPABASE_URL=https://obiademvomvddkjtcsny.supabase.co/
-      - SUPABASE_ANON_KEY=sb_publishable_wuvoP2KUBxDVMzrzUXJXVQ_qmHLdy0L
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
-      - PORT=${PORT:-3000}
+      - "3000:3000"
     networks:
       - acars-network
 
