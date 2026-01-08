@@ -6,6 +6,7 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 const AnnouncementService = require('./services/announcementService');
+const QuoteService = require('./services/quoteService');
 require('dotenv').config();
 
 // Create a new client instance
@@ -38,24 +39,73 @@ if (fs.existsSync(commandsPath)) {
     }
 }
 
-// Initialize announcement service (will be set when client is ready)
+// Initialize services (will be set when client is ready)
 let announcementService = null;
+let quoteService = null;
+let statusRotationInterval = null;
+let quoteInterval = null;
 
 // When the client is ready, run this code
 client.once(Events.ClientReady, readyClient => {
     console.log(`Ready! Logged in as ${readyClient.user.tag}`);
     console.log(`ACARS bot is now online!`);
     
-    // Set bot status
-    client.user.setPresence({
-        activities: [{
-            name: 'COMPANY MSG',
-            type: ActivityType.Watching
-        }],
-        status: 'online'
-    });
-    
+    // Initialize services
     announcementService = new AnnouncementService(client);
+    quoteService = new QuoteService(client);
+    
+    // Set up rotating bot status
+    const statuses = [
+        { name: 'COMPANY MSG 📧', type: ActivityType.Watching },
+        { name: 'the announcements 📢', type: ActivityType.Watching },
+        { name: 'messages ✉️', type: ActivityType.Listening },
+        { name: 'with Discord 🎮', type: ActivityType.Playing },
+        { name: 'the community 👥', type: ActivityType.Watching },
+        { name: 'ACARS Systems 🛫', type: ActivityType.Watching },
+        { name: 'inspiring quotes 💡', type: ActivityType.Watching },
+    ];
+    
+    let statusIndex = 0;
+    const updateStatus = () => {
+        const status = statuses[statusIndex];
+        client.user.setPresence({
+            activities: [status],
+            status: 'online'
+        });
+        statusIndex = (statusIndex + 1) % statuses.length;
+    };
+    
+    // Set initial status
+    updateStatus();
+    
+    // Rotate status every 30 seconds
+    statusRotationInterval = setInterval(updateStatus, 30000);
+    
+    // Set up inspirational quotes (every 3-5 minutes)
+    const QUOTE_CHANNEL_ID = '800272062630854667';
+    const sendQuote = async () => {
+        try {
+            await quoteService.sendQuote(QUOTE_CHANNEL_ID);
+        } catch (error) {
+            console.error('Error sending inspirational quote:', error);
+        }
+    };
+    
+    // Schedule next quote with random delay (3-5 minutes)
+    const scheduleNextQuote = () => {
+        const delay = Math.floor(Math.random() * 120000) + 180000; // 180000-300000 ms (3-5 minutes)
+        quoteInterval = setTimeout(() => {
+            sendQuote();
+            scheduleNextQuote(); // Schedule the next one
+        }, delay);
+    };
+    
+    // Send first quote after 30 seconds, then schedule recurring quotes
+    setTimeout(() => {
+        sendQuote();
+        scheduleNextQuote();
+    }, 30000);
+    
     startWebServer();
 });
 
@@ -112,6 +162,21 @@ client.on(Events.Error, error => {
 
 process.on('unhandledRejection', error => {
     console.error('Unhandled promise rejection:', error);
+});
+
+// Cleanup intervals on shutdown
+process.on('SIGINT', () => {
+    console.log('Shutting down...');
+    if (statusRotationInterval) clearInterval(statusRotationInterval);
+    if (quoteInterval) clearTimeout(quoteInterval);
+    process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+    console.log('Shutting down...');
+    if (statusRotationInterval) clearInterval(statusRotationInterval);
+    if (quoteInterval) clearTimeout(quoteInterval);
+    process.exit(0);
 });
 
 // Web server setup
