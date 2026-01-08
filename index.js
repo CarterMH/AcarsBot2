@@ -202,6 +202,47 @@ function getRandomEmbedColor() {
 }
 
 /**
+ * Get Unicode direction indicator based on heading (degrees).
+ * Returns an arrow or compass direction emoji.
+ */
+function getDirectionIndicator(heading) {
+    if (heading === null || heading === undefined || Number.isNaN(Number(heading))) {
+        return '✈️'; // Default aircraft emoji
+    }
+    
+    const h = Number(heading);
+    // Convert heading to cardinal/ordinal direction
+    const directions = [
+        { range: [337.5, 22.5], emoji: '⬆️', name: 'N' },   // North
+        { range: [22.5, 67.5], emoji: '↗️', name: 'NE' },   // Northeast
+        { range: [67.5, 112.5], emoji: '➡️', name: 'E' },   // East
+        { range: [112.5, 157.5], emoji: '↘️', name: 'SE' }, // Southeast
+        { range: [157.5, 202.5], emoji: '⬇️', name: 'S' },   // South
+        { range: [202.5, 247.5], emoji: '↙️', name: 'SW' },  // Southwest
+        { range: [247.5, 292.5], emoji: '⬅️', name: 'W' },   // West
+        { range: [292.5, 337.5], emoji: '↖️', name: 'NW' },  // Northwest
+    ];
+    
+    // Handle wrap-around (heading can be 0-360)
+    const normalizedHeading = ((h % 360) + 360) % 360;
+    
+    for (const dir of directions) {
+        if (dir.range[0] > dir.range[1]) {
+            // Handle wrap-around case (North: 337.5-22.5)
+            if (normalizedHeading >= dir.range[0] || normalizedHeading <= dir.range[1]) {
+                return `${dir.emoji} ${dir.name} (${h.toFixed(0)}°)`;
+            }
+        } else {
+            if (normalizedHeading >= dir.range[0] && normalizedHeading <= dir.range[1]) {
+                return `${dir.emoji} ${dir.name} (${h.toFixed(0)}°)`;
+            }
+        }
+    }
+    
+    return `✈️ ${h.toFixed(0)}°`; // Fallback
+}
+
+/**
  * Send a nicely formatted embed to the flight status channel.
  */
 async function sendFlightStatusEmbed(type, flight, options = {}) {
@@ -255,6 +296,16 @@ async function sendFlightStatusEmbed(type, flight, options = {}) {
 
     if (latitude !== null && longitude !== null) {
         description += `\n**Position:** ${latitude}, ${longitude}`;
+    }
+
+    // Add heading/direction indicator if available
+    const heading = flight.heading !== null && flight.heading !== undefined ? Number(flight.heading) :
+                   (flight.bearing !== null && flight.bearing !== undefined ? Number(flight.bearing) :
+                   (flight.course !== null && flight.course !== undefined ? Number(flight.course) : null));
+    
+    if (heading !== null && !Number.isNaN(heading)) {
+        const directionIndicator = getDirectionIndicator(heading);
+        description += `\n**Heading:** ${directionIndicator}`;
     }
 
     if (extraDescription) {

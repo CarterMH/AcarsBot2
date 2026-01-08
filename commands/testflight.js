@@ -135,6 +135,45 @@ function createFlightEmbed(flight) {
         description += `\n**Position:** ${latitude}, ${longitude}`;
     }
 
+    // Add heading/direction indicator if available
+    const heading = flight.heading !== null && flight.heading !== undefined ? Number(flight.heading) :
+                   (flight.bearing !== null && flight.bearing !== undefined ? Number(flight.bearing) :
+                   (flight.course !== null && flight.course !== undefined ? Number(flight.course) : null));
+    
+    if (heading !== null && !Number.isNaN(heading)) {
+        // Get direction indicator
+        const h = Number(heading);
+        const directions = [
+            { range: [337.5, 22.5], emoji: '⬆️', name: 'N' },
+            { range: [22.5, 67.5], emoji: '↗️', name: 'NE' },
+            { range: [67.5, 112.5], emoji: '➡️', name: 'E' },
+            { range: [112.5, 157.5], emoji: '↘️', name: 'SE' },
+            { range: [157.5, 202.5], emoji: '⬇️', name: 'S' },
+            { range: [202.5, 247.5], emoji: '↙️', name: 'SW' },
+            { range: [247.5, 292.5], emoji: '⬅️', name: 'W' },
+            { range: [292.5, 337.5], emoji: '↖️', name: 'NW' },
+        ];
+        
+        const normalizedHeading = ((h % 360) + 360) % 360;
+        let directionIndicator = `✈️ ${h.toFixed(0)}°`;
+        
+        for (const dir of directions) {
+            if (dir.range[0] > dir.range[1]) {
+                if (normalizedHeading >= dir.range[0] || normalizedHeading <= dir.range[1]) {
+                    directionIndicator = `${dir.emoji} ${dir.name} (${h.toFixed(0)}°)`;
+                    break;
+                }
+            } else {
+                if (normalizedHeading >= dir.range[0] && normalizedHeading <= dir.range[1]) {
+                    directionIndicator = `${dir.emoji} ${dir.name} (${h.toFixed(0)}°)`;
+                    break;
+                }
+            }
+        }
+        
+        description += `\n**Heading:** ${directionIndicator}`;
+    }
+
     description += `\n**Status:** [DEV] Active flight status`;
 
     const embed = new EmbedBuilder()
