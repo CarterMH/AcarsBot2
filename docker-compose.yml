@@ -2,9 +2,7 @@ version: '3.8'
 
 services:
   acars-bot:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/cartermh/acarsbot2:latest
     container_name: acarsbot2
     restart: unless-stopped
     ports:
