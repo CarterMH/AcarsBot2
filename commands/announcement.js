@@ -20,7 +20,7 @@ module.exports = {
                 .setRequired(true))
         .addStringOption(option =>
             option.setName('color')
-                .setDescription('Color for the announcement (select from list or enter hex code) - optional, defaults to Discord blurple')
+                .setDescription('Color (select from list or hex code) - optional, defaults to blurple')
                 .setRequired(false)
                 .setAutocomplete(true))
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
