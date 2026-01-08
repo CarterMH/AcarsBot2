@@ -66,6 +66,12 @@ let flightStatusInterval = null;
 // In-memory tracking of flight state to detect events (takeoff/landing, etc.)
 const flightState = new Map();
 
+// Configuration for flight tracking updates
+const FLIGHT_UPDATE_INTERVAL_MS = 2 * 60 * 1000; // Send status update every 2 minutes while in flight
+const ALTITUDE_CHANGE_THRESHOLD_FT = 2000; // Send update if altitude changes by this much
+const SPEED_CHANGE_THRESHOLD_KTS = 50; // Send update if speed changes by this much
+const POSITION_CHANGE_THRESHOLD_NM = 10; // Send update if position changes by this much (nautical miles)
+
 const FLIGHT_STATUS_CHANNEL_ID = process.env.FLIGHT_STATUS_CHANNEL_ID || '1458721716002881789';
 const FLIGHT_POLL_INTERVAL_MS = Number(process.env.FLIGHT_POLL_INTERVAL_MS || 15000);
 
@@ -403,41 +409,147 @@ async function pollActiveFlights() {
             const currentPhase = getPhaseFromAltitude(flight.altitude);
             const vsFpm = getVerticalSpeedFpm(flight, prev, now);
 
-            // First time we see this flight - just store state, and optionally send a "tracking" message
+            // Extract current flight data
+            const currentAlt = typeof flight.altitude === 'number' ? flight.altitude : null;
+            const currentLat = typeof flight.latitude === 'number' ? flight.latitude : null;
+            const currentLon = typeof flight.longitude === 'number' ? flight.longitude : null;
+            const currentSpeed = typeof flight.speed === 'number' ? flight.speed : 
+                                (typeof flight.ground_speed === 'number' ? flight.ground_speed :
+                                (typeof flight.airspeed === 'number' ? flight.airspeed : null));
+            const currentHeading = flight.heading !== null && flight.heading !== undefined ? Number(flight.heading) :
+                                 (flight.bearing !== null && flight.bearing !== undefined ? Number(flight.bearing) :
+                                 (flight.course !== null && flight.course !== undefined ? Number(flight.course) : null));
+
+            // First time we see this flight - initialize state and send tracking message
             if (!prev) {
                 flightState.set(id, {
-                    altitude: typeof flight.altitude === 'number' ? flight.altitude : null,
+                    altitude: currentAlt,
+                    latitude: currentLat,
+                    longitude: currentLon,
+                    speed: currentSpeed,
+                    heading: currentHeading,
                     phase: currentPhase,
                     timestamp: now,
+                    lastUpdateTime: now,
                 });
 
-                // Optional: send an initial flight tracking message
                 await sendFlightStatusEmbed('update', flight, {
                     verticalSpeedFpm: vsFpm,
-                    extraDescription: '**Status:** Flight entered active tracking.',
+                    extraDescription: '**Status:** ✈️ Flight entered active tracking.',
                 });
 
                 continue;
             }
 
-            // Detect phase transitions
+            // Calculate time since last update
+            const timeSinceLastUpdate = now - (prev.lastUpdateTime || prev.timestamp);
+            let shouldSendUpdate = false;
+            let updateReason = '';
+
+            // Trigger 1: Phase transitions (takeoff/landing)
             if (prev.phase === 'ground' && currentPhase === 'airborne') {
                 await sendFlightStatusEmbed('takeoff', flight, {
                     verticalSpeedFpm: vsFpm,
-                    extraDescription: '**Event:** Takeoff detected.',
+                    extraDescription: '**Event:** 🚀 Takeoff detected.',
                 });
+                shouldSendUpdate = true;
+                updateReason = 'Takeoff';
             } else if (prev.phase === 'airborne' && currentPhase === 'ground') {
                 await sendFlightStatusEmbed('landing', flight, {
                     verticalSpeedFpm: vsFpm,
-                    extraDescription: '**Event:** Landing detected.',
+                    extraDescription: '**Event:** 🛬 Landing detected.',
+                });
+                shouldSendUpdate = true;
+                updateReason = 'Landing';
+            }
+
+            // Trigger 2: Regular status updates (every 2 minutes while in flight)
+            if (currentPhase === 'airborne' && timeSinceLastUpdate >= FLIGHT_UPDATE_INTERVAL_MS) {
+                shouldSendUpdate = true;
+                updateReason = 'Regular status update';
+            }
+
+            // Trigger 3: Significant altitude change
+            if (currentAlt !== null && prev.altitude !== null) {
+                const altChange = Math.abs(currentAlt - prev.altitude);
+                if (altChange >= ALTITUDE_CHANGE_THRESHOLD_FT) {
+                    shouldSendUpdate = true;
+                    const direction = currentAlt > prev.altitude ? '📈 Climbing' : '📉 Descending';
+                    updateReason = `${direction} (${altChange.toFixed(0)} ft change)`;
+                }
+            }
+
+            // Trigger 4: Significant speed change
+            if (currentSpeed !== null && prev.speed !== null) {
+                const speedChange = Math.abs(currentSpeed - prev.speed);
+                if (speedChange >= SPEED_CHANGE_THRESHOLD_KTS) {
+                    shouldSendUpdate = true;
+                    const direction = currentSpeed > prev.speed ? '⚡ Accelerating' : '🛑 Decelerating';
+                    updateReason = `${direction} (${speedChange.toFixed(0)} kts change)`;
+                }
+            }
+
+            // Trigger 5: Significant position change (distance traveled)
+            if (currentLat !== null && currentLon !== null && prev.latitude !== null && prev.longitude !== null) {
+                // Calculate distance in nautical miles using Haversine formula
+                const R = 3440; // Earth radius in nautical miles
+                const dLat = (currentLat - prev.latitude) * Math.PI / 180;
+                const dLon = (currentLon - prev.longitude) * Math.PI / 180;
+                const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                         Math.cos(prev.latitude * Math.PI / 180) * Math.cos(currentLat * Math.PI / 180) *
+                         Math.sin(dLon / 2) * Math.sin(dLon / 2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                const distanceNm = R * c;
+
+                if (distanceNm >= POSITION_CHANGE_THRESHOLD_NM) {
+                    shouldSendUpdate = true;
+                    updateReason = `📍 Position update (${distanceNm.toFixed(1)} nm traveled)`;
+                }
+            }
+
+            // Trigger 6: Vertical speed phase detection (climb, cruise, descent)
+            if (vsFpm !== null && !Number.isNaN(vsFpm)) {
+                let phaseChange = false;
+                let phaseDescription = '';
+                
+                if (vsFpm > 500 && (prev.verticalPhase !== 'climb')) {
+                    phaseChange = true;
+                    phaseDescription = '📈 Climbing';
+                } else if (vsFpm < -500 && (prev.verticalPhase !== 'descent')) {
+                    phaseChange = true;
+                    phaseDescription = '📉 Descending';
+                } else if (Math.abs(vsFpm) <= 200 && (prev.verticalPhase !== 'cruise')) {
+                    phaseChange = true;
+                    phaseDescription = '✈️ Cruise';
+                }
+
+                if (phaseChange && currentPhase === 'airborne') {
+                    shouldSendUpdate = true;
+                    updateReason = `**Phase:** ${phaseDescription}`;
+                }
+            }
+
+            // Send update if any trigger was met
+            if (shouldSendUpdate && currentPhase === 'airborne') {
+                await sendFlightStatusEmbed('update', flight, {
+                    verticalSpeedFpm: vsFpm,
+                    extraDescription: updateReason ? `**Event:** ${updateReason}` : '**Status:** Flight update.',
                 });
             }
 
-            // Update stored state
+            // Update stored state with all current values
             flightState.set(id, {
-                altitude: typeof flight.altitude === 'number' ? flight.altitude : prev.altitude,
+                altitude: currentAlt !== null ? currentAlt : prev.altitude,
+                latitude: currentLat !== null ? currentLat : prev.latitude,
+                longitude: currentLon !== null ? currentLon : prev.longitude,
+                speed: currentSpeed !== null ? currentSpeed : prev.speed,
+                heading: currentHeading !== null ? currentHeading : prev.heading,
                 phase: currentPhase,
                 timestamp: now,
+                lastUpdateTime: shouldSendUpdate ? now : (prev.lastUpdateTime || prev.timestamp),
+                verticalPhase: vsFpm !== null && !Number.isNaN(vsFpm) ? 
+                    (vsFpm > 500 ? 'climb' : (vsFpm < -500 ? 'descent' : 'cruise')) : 
+                    (prev.verticalPhase || null),
             });
         }
 
