@@ -2,7 +2,10 @@ version: '3.8'
 
 services:
   acars-bot:
-    image: ghcr.io/cartermh/acarsbot2:latest
+    # Build from Git repository (Portainer will auto-pull and rebuild on updates)
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: acarsbot2
     restart: unless-stopped
     ports:
