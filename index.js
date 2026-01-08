@@ -72,6 +72,10 @@ const ALTITUDE_CHANGE_THRESHOLD_FT = 2000; // Send update if altitude changes by
 const SPEED_CHANGE_THRESHOLD_KTS = 50; // Send update if speed changes by this much
 const POSITION_CHANGE_THRESHOLD_NM = 10; // Send update if position changes by this much (nautical miles)
 
+// Crash detection configuration
+const CRASH_DESCENT_THRESHOLD_FT = 10000; // Detect crash if descending more than this
+const CRASH_TIME_WINDOW_MS = 60 * 1000; // Within this time window (1 minute)
+
 const FLIGHT_STATUS_CHANNEL_ID = process.env.FLIGHT_STATUS_CHANNEL_ID || '1458721716002881789';
 const FLIGHT_POLL_INTERVAL_MS = Number(process.env.FLIGHT_POLL_INTERVAL_MS || 15000);
 
@@ -287,6 +291,9 @@ async function sendFlightStatusEmbed(type, flight, options = {}) {
         title = `🚀 Takeoff detected - ${callsign}`;
     } else if (type === 'landing') {
         title = `🛬 Landing detected - ${callsign}`;
+    } else if (type === 'crash') {
+        title = `🚨 CRASH DETECTED - ${callsign} 🚨`;
+        color = 0xFF0000; // Bright red for crash
     } else {
         title = `✈️ Flight update - ${callsign}`;
     }
@@ -431,6 +438,7 @@ async function pollActiveFlights() {
                     phase: currentPhase,
                     timestamp: now,
                     lastUpdateTime: now,
+                    altitudeHistory: currentAlt !== null ? [{ altitude: currentAlt, timestamp: now }] : [],
                 });
 
                 await sendFlightStatusEmbed('update', flight, {
@@ -439,6 +447,56 @@ async function pollActiveFlights() {
                 });
 
                 continue;
+            }
+
+            // CRASH DETECTION: Check for rapid descent (>10k ft in <1 minute)
+            if (currentAlt !== null && prev.altitudeHistory && prev.altitudeHistory.length > 0) {
+                // Add current altitude to history
+                const altitudeHistory = [...(prev.altitudeHistory || []), { altitude: currentAlt, timestamp: now }];
+                
+                // Keep only last 2 minutes of history
+                const twoMinutesAgo = now - (2 * 60 * 1000);
+                const recentHistory = altitudeHistory.filter(h => h.timestamp >= twoMinutesAgo);
+                
+                // Find the highest altitude in the last minute
+                const oneMinuteAgo = now - CRASH_TIME_WINDOW_MS;
+                const recentAltitudes = recentHistory.filter(h => h.timestamp >= oneMinuteAgo);
+                
+                if (recentAltitudes.length > 0) {
+                    const maxAltitude = Math.max(...recentAltitudes.map(h => h.altitude));
+                    const descentAmount = maxAltitude - currentAlt;
+                    
+                    if (descentAmount >= CRASH_DESCENT_THRESHOLD_FT) {
+                        // CRASH DETECTED!
+                        const timeWindow = (now - Math.min(...recentAltitudes.map(h => h.timestamp))) / 1000;
+                        await sendFlightStatusEmbed('crash', flight, {
+                            verticalSpeedFpm: vsFpm,
+                            extraDescription: `**🚨 CRASH DETECTED 🚨**\n**Descent:** ${descentAmount.toFixed(0)} ft in ${timeWindow.toFixed(1)} seconds\n**Rate:** ${(descentAmount / timeWindow * 60).toFixed(0)} fpm\n**⚠️ EMERGENCY SITUATION**`,
+                        });
+                        
+                        // Update state and mark as crash detected
+                        flightState.set(id, {
+                            ...prev,
+                            altitude: currentAlt,
+                            latitude: currentLat,
+                            longitude: currentLon,
+                            speed: currentSpeed,
+                            heading: currentHeading,
+                            phase: currentPhase,
+                            timestamp: now,
+                            lastUpdateTime: now,
+                            altitudeHistory: recentHistory,
+                            crashDetected: true,
+                        });
+                        continue; // Skip other updates after crash detection
+                    }
+                }
+                
+                // Update altitude history
+                prev.altitudeHistory = recentHistory;
+            } else if (currentAlt !== null) {
+                // Initialize altitude history if we have altitude but no history
+                prev.altitudeHistory = [{ altitude: currentAlt, timestamp: now }];
             }
 
             // Calculate time since last update
@@ -550,6 +608,7 @@ async function pollActiveFlights() {
                 verticalPhase: vsFpm !== null && !Number.isNaN(vsFpm) ? 
                     (vsFpm > 500 ? 'climb' : (vsFpm < -500 ? 'descent' : 'cruise')) : 
                     (prev.verticalPhase || null),
+                altitudeHistory: prev.altitudeHistory || (currentAlt !== null ? [{ altitude: currentAlt, timestamp: now }] : []),
             });
         }
 
