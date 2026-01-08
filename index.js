@@ -14,8 +14,9 @@ const client = new Client({
     intents: [
         GatewayIntentBits.Guilds, // Required for slash commands
         GatewayIntentBits.GuildMessages, // For sending messages
+        GatewayIntentBits.DirectMessages, // For receiving DMs
+        GatewayIntentBits.MessageContent, // For reading message content (privileged - enable in Discord Developer Portal)
         // Add more intents below if needed:
-        // GatewayIntentBits.MessageContent, // For reading message content (privileged - enable in Discord Developer Portal)
         // GatewayIntentBits.GuildMembers, // For accessing member list (privileged - enable in Discord Developer Portal)
     ],
 });
@@ -112,6 +113,29 @@ client.once(Events.ClientReady, readyClient => {
     }, 30000);
     
     startWebServer();
+});
+
+// Handle incoming DMs
+client.on(Events.MessageCreate, async message => {
+    // Ignore messages from bots (including itself)
+    if (message.author.bot) return;
+    
+    // Only handle DMs (messages not in a guild/server)
+    if (message.guild) return;
+    
+    // Log the DM
+    console.log(`📩 DM received from ${message.author.tag} (${message.author.id}): ${message.content}`);
+    
+    // You can add custom DM handling logic here
+    // For example, auto-reply, forward to a channel, etc.
+    
+    // Example: Auto-reply to DMs (optional - remove if not needed)
+    try {
+        // You can customize this response or remove it entirely
+        // await message.reply('Thanks for your message! I received it.');
+    } catch (error) {
+        console.error('Error handling DM:', error);
+    }
 });
 
 // Handle slash commands and autocomplete
