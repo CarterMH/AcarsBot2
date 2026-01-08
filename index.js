@@ -78,15 +78,16 @@ function getPhaseFromAltitude(altitude) {
 
 /**
  * Choose map zoom level based on altitude (ft).
- * Higher altitude = zoomed out (wider area, e.g. US-wide above ~20k).
+ * Higher altitude = zoomed out (wider area).
+ * Maximum zoom out is capped at ~300nm (zoom level 7).
  */
 function getZoomForAltitude(altitude) {
     const alt = typeof altitude === 'number' ? altitude : 0;
 
-    if (alt <= 3000) return 11;        // airport / local pattern view
-    if (alt <= 8000) return 9;         // city-scale
-    if (alt <= 20000) return 7;        // regional
-    return 4;                          // US-wide / large area
+    if (alt <= 3000) return 11;        // airport / local pattern view (~10-20nm)
+    if (alt <= 8000) return 9;         // city-scale (~50-100nm)
+    if (alt <= 20000) return 7;        // regional (~200-300nm)
+    return 7;                          // Maximum zoom out capped at ~300nm
 }
 
 /**
@@ -150,10 +151,15 @@ async function sendFlightStatusEmbed(type, flight, options = {}) {
     const aircraft = flight.aircraft_type || flight.aircraft || 'Unknown';
     const origin = flight.origin || 'Unknown';
     const destination = flight.destination || 'Unknown';
-    const altitude = typeof flight.altitude === 'number' ? `${flight.altitude.toFixed(0)} ft` : 'N/A';
-    const altitudeAgl = typeof flight.altitude_agl === 'number' ? `${flight.altitude_agl.toFixed(0)} ft` : null;
-    const latitude = typeof flight.latitude === 'number' ? flight.latitude.toFixed(4) : null;
-    const longitude = typeof flight.longitude === 'number' ? flight.longitude.toFixed(4) : null;
+    const altitudeNum = flight.altitude !== null && flight.altitude !== undefined ? Number(flight.altitude) : null;
+    const altitudeAglNum = flight.altitude_agl !== null && flight.altitude_agl !== undefined ? Number(flight.altitude_agl) : null;
+    const latitudeNum = flight.latitude !== null && flight.latitude !== undefined ? Number(flight.latitude) : null;
+    const longitudeNum = flight.longitude !== null && flight.longitude !== undefined ? Number(flight.longitude) : null;
+
+    const altitude = typeof altitudeNum === 'number' && !Number.isNaN(altitudeNum) ? `${altitudeNum.toFixed(0)} ft` : 'N/A';
+    const altitudeAgl = typeof altitudeAglNum === 'number' && !Number.isNaN(altitudeAglNum) ? `${altitudeAglNum.toFixed(0)} ft` : null;
+    const latitude = typeof latitudeNum === 'number' && !Number.isNaN(latitudeNum) ? latitudeNum.toFixed(4) : null;
+    const longitude = typeof longitudeNum === 'number' && !Number.isNaN(longitudeNum) ? longitudeNum.toFixed(4) : null;
 
     let title = '';
     let color = 0x5865F2; // default blurple
@@ -202,10 +208,10 @@ async function sendFlightStatusEmbed(type, flight, options = {}) {
         embed.addFields({ name: 'Engine Info', value: engineInfoParts.join('\n') });
     }
 
-    // Add a static map image if we have coordinates and Mapbox is configured
-    const rawLat = typeof flight.latitude === 'number' ? flight.latitude : null;
-    const rawLon = typeof flight.longitude === 'number' ? flight.longitude : null;
-    const rawAlt = typeof flight.altitude === 'number' ? flight.altitude : null;
+    // Add a static map image if we have coordinates
+    const rawLat = latitudeNum;
+    const rawLon = longitudeNum;
+    const rawAlt = altitudeNum;
 
     const mapUrl = buildFlightMapUrl(rawLat, rawLon, rawAlt, callsign);
     if (mapUrl) {

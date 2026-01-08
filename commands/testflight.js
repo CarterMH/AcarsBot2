@@ -4,14 +4,15 @@ require('dotenv').config();
 
 /**
  * Get zoom level based on altitude (ft).
- * Higher altitude = zoomed out (wider area, e.g. US-wide above ~20k).
+ * Higher altitude = zoomed out (wider area).
+ * Maximum zoom out is capped at ~300nm (zoom level 7).
  */
 function getZoomForAltitude(altitude) {
     const alt = typeof altitude === 'number' ? altitude : 0;
-    if (alt <= 3000) return 11;        // airport / local pattern view
-    if (alt <= 8000) return 9;         // city-scale
-    if (alt <= 20000) return 7;        // regional
-    return 4;                          // US-wide / large area
+    if (alt <= 3000) return 11;        // airport / local pattern view (~10-20nm)
+    if (alt <= 8000) return 9;         // city-scale (~50-100nm)
+    if (alt <= 20000) return 7;        // regional (~200-300nm)
+    return 7;                          // Maximum zoom out capped at ~300nm
 }
 
 /**
@@ -19,12 +20,19 @@ function getZoomForAltitude(altitude) {
  * Uses OpenStreetMap static map service.
  */
 function buildFlightMapUrl(latitude, longitude, altitude, callsign) {
-    if (typeof latitude !== 'number' || typeof longitude !== 'number') return null;
+    if (latitude === null || latitude === undefined || longitude === null || longitude === undefined) return null;
+
+    const latNum = Number(latitude);
+    const lonNum = Number(longitude);
+    const altNum = altitude !== null && altitude !== undefined ? Number(altitude) : 0;
+
+    if (Number.isNaN(latNum) || Number.isNaN(lonNum)) return null;
+
     const zoom = getZoomForAltitude(altitude);
     const size = '600x400';
     const markerColor = 'red-pushpin';
-    const markerParam = `${latitude},${longitude},${markerColor}`;
-    return `https://staticmap.openstreetmap.de/staticmap.php?center=${latitude},${longitude}&zoom=${zoom}&size=${size}&markers=${markerParam}`;
+    const markerParam = `${latNum},${lonNum},${markerColor}`;
+    return `https://staticmap.openstreetmap.de/staticmap.php?center=${latNum},${lonNum}&zoom=${zoom}&size=${size}&markers=${markerParam}`;
 }
 
 /**
@@ -35,10 +43,15 @@ function createFlightEmbed(flight) {
     const aircraft = flight.aircraft_type || flight.aircraft || 'Unknown';
     const origin = flight.origin || 'Unknown';
     const destination = flight.destination || 'Unknown';
-    const altitude = typeof flight.altitude === 'number' ? `${flight.altitude.toFixed(0)} ft` : 'N/A';
-    const altitudeAgl = typeof flight.altitude_agl === 'number' ? `${flight.altitude_agl.toFixed(0)} ft` : null;
-    const latitude = typeof flight.latitude === 'number' ? flight.latitude.toFixed(4) : null;
-    const longitude = typeof flight.longitude === 'number' ? flight.longitude.toFixed(4) : null;
+    const altitudeNum = flight.altitude !== null && flight.altitude !== undefined ? Number(flight.altitude) : null;
+    const altitudeAglNum = flight.altitude_agl !== null && flight.altitude_agl !== undefined ? Number(flight.altitude_agl) : null;
+    const latitudeNum = flight.latitude !== null && flight.latitude !== undefined ? Number(flight.latitude) : null;
+    const longitudeNum = flight.longitude !== null && flight.longitude !== undefined ? Number(flight.longitude) : null;
+
+    const altitude = typeof altitudeNum === 'number' && !Number.isNaN(altitudeNum) ? `${altitudeNum.toFixed(0)} ft` : 'N/A';
+    const altitudeAgl = typeof altitudeAglNum === 'number' && !Number.isNaN(altitudeAglNum) ? `${altitudeAglNum.toFixed(0)} ft` : null;
+    const latitude = typeof latitudeNum === 'number' && !Number.isNaN(latitudeNum) ? latitudeNum.toFixed(4) : null;
+    const longitude = typeof longitudeNum === 'number' && !Number.isNaN(longitudeNum) ? longitudeNum.toFixed(4) : null;
     const verticalSpeedFpm = typeof flight.vertical_speed_fpm === 'number' ? flight.vertical_speed_fpm : 
                               (typeof flight.vertical_speed === 'number' ? flight.vertical_speed : null);
 
@@ -79,11 +92,7 @@ function createFlightEmbed(flight) {
     }
 
     // Add map if coordinates provided
-    const rawLat = typeof flight.latitude === 'number' ? flight.latitude : null;
-    const rawLon = typeof flight.longitude === 'number' ? flight.longitude : null;
-    const rawAlt = typeof flight.altitude === 'number' ? flight.altitude : null;
-
-    const mapUrl = buildFlightMapUrl(rawLat, rawLon, rawAlt, callsign);
+    const mapUrl = buildFlightMapUrl(latitudeNum, longitudeNum, altitudeNum, callsign);
     if (mapUrl) {
         embed.setImage(mapUrl);
     }
