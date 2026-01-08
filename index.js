@@ -77,6 +77,39 @@ function getPhaseFromAltitude(altitude) {
 }
 
 /**
+ * Choose map zoom level based on altitude (ft).
+ * Higher altitude = zoomed out (wider area, e.g. US-wide above ~20k).
+ */
+function getZoomForAltitude(altitude) {
+    const alt = typeof altitude === 'number' ? altitude : 0;
+
+    if (alt <= 3000) return 11;        // airport / local pattern view
+    if (alt <= 8000) return 9;         // city-scale
+    if (alt <= 20000) return 7;        // regional
+    return 4;                          // US-wide / large area
+}
+
+/**
+ * Build a static map URL centered on the aircraft with an airline-style marker.
+ * Uses an OpenStreetMap-based static map service (no API key required).
+ */
+function buildFlightMapUrl(latitude, longitude, altitude, callsign) {
+    if (typeof latitude !== 'number' || typeof longitude !== 'number') return null;
+
+    const zoom = getZoomForAltitude(altitude);
+    const size = '600x400'; // width x height in pixels
+
+    // Using staticmap.openstreetmap.de - markers are specified as: lat,lon,color
+    // Example: &markers=51.5,7.4,red-pushpin
+    const markerColor = 'red-pushpin';
+    const markerParam = `${latitude},${longitude},${markerColor}`;
+
+    // Note: OSM static map service does not support custom labels in the image,
+    // but the callsign is already in the embed title.
+    return `https://staticmap.openstreetmap.de/staticmap.php?center=${latitude},${longitude}&zoom=${zoom}&size=${size}&markers=${markerParam}`;
+}
+
+/**
  * Get vertical speed in FPM either from row data or calculating from previous sample.
  */
 function getVerticalSpeedFpm(currentRow, previousState, now) {
@@ -167,6 +200,16 @@ async function sendFlightStatusEmbed(type, flight, options = {}) {
 
     if (engineInfoParts.length > 0) {
         embed.addFields({ name: 'Engine Info', value: engineInfoParts.join('\n') });
+    }
+
+    // Add a static map image if we have coordinates and Mapbox is configured
+    const rawLat = typeof flight.latitude === 'number' ? flight.latitude : null;
+    const rawLon = typeof flight.longitude === 'number' ? flight.longitude : null;
+    const rawAlt = typeof flight.altitude === 'number' ? flight.altitude : null;
+
+    const mapUrl = buildFlightMapUrl(rawLat, rawLon, rawAlt, callsign);
+    if (mapUrl) {
+        embed.setImage(mapUrl);
     }
 
     try {
