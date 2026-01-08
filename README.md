@@ -157,6 +157,63 @@ Make sure your bot has the following permissions in the announcement channel:
 
 **⚠️ Important:** Discord bots **CANNOT** run on Cloudflare Workers or Cloudflare Pages because they require persistent WebSocket connections. Discord bots must run on platforms that support long-running processes.
 
+### Docker Container (GitHub Container Registry)
+
+The bot is automatically built and published to GitHub Container Registry on every push to main/master and on version tags.
+
+**Note:** The package will be automatically made public after the first successful build. If you encounter issues pulling the image, you can manually make the package public:
+1. Go to your GitHub repository
+2. Click on "Packages" on the right sidebar (or go to `https://github.com/users/YOUR_USERNAME/packages/container/acarsbot2`)
+3. Click on the package
+4. Go to "Package settings" → "Change visibility" → Select "Public"
+
+#### Pull and Run
+
+```bash
+# Login to GitHub Container Registry (optional, only needed for private repos)
+echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
+
+# Pull the latest image
+docker pull ghcr.io/YOUR_USERNAME/acarsbot2:latest
+
+# Run the container
+docker run -d \
+  --name acars-bot \
+  --restart unless-stopped \
+  -p 3000:3000 \
+  -e DISCORD_TOKEN=your_token \
+  -e CLIENT_ID=your_client_id \
+  -e GUILD_ID=your_guild_id \
+  -e ADMIN_PASSWORD=your_password \
+  -e ANNOUNCEMENT_CHANNEL_ID=your_channel_id \
+  -e SUPABASE_URL=your_supabase_url \
+  -e SUPABASE_ANON_KEY=your_supabase_key \
+  -e ALLOWED_ORIGINS=your_origins \
+  ghcr.io/YOUR_USERNAME/acarsbot2:latest
+```
+
+#### Using docker-compose
+
+Update your `docker-compose.yml` to use the published image:
+
+```yaml
+version: '3.8'
+
+services:
+  acars-bot:
+    image: ghcr.io/YOUR_USERNAME/acarsbot2:latest
+    container_name: acars-discord-bot
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - CLIENT_ID=${CLIENT_ID}
+      # ... other environment variables
+```
+
+Replace `YOUR_USERNAME` with your GitHub username. The image will be published to `ghcr.io/YOUR_USERNAME/acarsbot2:latest`.
+
 ### Recommended Deployment Platforms
 
 #### Railway (Recommended)
