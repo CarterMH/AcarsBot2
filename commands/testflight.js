@@ -17,8 +17,8 @@ function getZoomForAltitude(altitude) {
 }
 
 /**
- * Fetch a static map image using LocationIQ free static map API or Stamen Maps fallback.
- * These services allow embedding and comply with usage policies.
+ * Fetch a static map image using multiple free map tile services with fallbacks.
+ * Tries different services until one works.
  */
 async function fetchMapImage(latitude, longitude, altitude, callsign) {
     // Handle string/number conversion
@@ -32,40 +32,70 @@ async function fetchMapImage(latitude, longitude, altitude, callsign) {
 
     const altNum = altitude !== null && altitude !== undefined ? Number(altitude) : 0;
     const zoom = getZoomForAltitude(altNum);
-    const width = 600;
-    const height = 400;
 
-    // Use Stamen Maps - free, allows embedding, no API key required
-    // Stamen Maps provides terrain tiles that are free to use
+    // Calculate tile coordinates from lat/lon
     const n = Math.pow(2, zoom);
     const tileX = Math.floor((lonNum + 180) / 360 * n);
     const tileY = Math.floor((1 - Math.log(Math.tan(latNum * Math.PI / 180) + 1 / Math.cos(latNum * Math.PI / 180)) / Math.PI) / 2 * n);
-    
-    // Stamen Maps terrain tiles - free and allows embedding
-    const stamenUrl = `https://stamen-tiles.a.ssl.fastly.net/terrain/${zoom}/${tileX}/${tileY}.png`;
 
-    console.log(`🗺️ Fetching map tile for ${callsign || 'flight'}: ${stamenUrl}`);
+    console.log(`🗺️ Fetching map tile for ${callsign || 'flight'}`);
     console.log(`   Coordinates: lat=${latNum}, lon=${lonNum}, zoom=${zoom}, tile: ${tileX}/${tileY}`);
 
-    return new Promise((resolve, reject) => {
-        https.get(stamenUrl, (res) => {
-            if (res.statusCode !== 200) {
-                console.error(`❌ Stamen Maps returned status ${res.statusCode}`);
-                return reject(new Error(`Stamen Maps returned status ${res.statusCode}`));
-            }
+    // Try multiple free map tile services with fallbacks
+    const tileServices = [
+        {
+            name: 'CartoDB Positron',
+            url: `https://a.basemaps.cartocdn.com/light_all/${zoom}/${tileX}/${tileY}.png`
+        },
+        {
+            name: 'CartoDB Dark Matter',
+            url: `https://a.basemaps.cartocdn.com/dark_all/${zoom}/${tileX}/${tileY}.png`
+        },
+        {
+            name: 'Stamen Terrain',
+            url: `https://stamen-tiles.a.ssl.fastly.net/terrain/${zoom}/${tileX}/${tileY}.png`
+        },
+        {
+            name: 'Stamen Toner',
+            url: `https://stamen-tiles.a.ssl.fastly.net/toner/${zoom}/${tileX}/${tileY}.png`
+        }
+    ];
 
-            const chunks = [];
-            res.on('data', (chunk) => chunks.push(chunk));
-            res.on('end', () => {
-                const buffer = Buffer.concat(chunks);
-                console.log(`✅ Map tile fetched from Stamen Maps (${buffer.length} bytes)`);
-                resolve(buffer);
+    // Try each service until one works
+    for (const service of tileServices) {
+        try {
+            console.log(`   Trying ${service.name}...`);
+            const buffer = await new Promise((resolve, reject) => {
+                https.get(service.url, (res) => {
+                    if (res.statusCode !== 200) {
+                        return reject(new Error(`${service.name} returned status ${res.statusCode}`));
+                    }
+
+                    const chunks = [];
+                    res.on('data', (chunk) => chunks.push(chunk));
+                    res.on('end', () => {
+                        const buffer = Buffer.concat(chunks);
+                        if (buffer.length > 0) {
+                            resolve(buffer);
+                        } else {
+                            reject(new Error(`${service.name} returned empty response`));
+                        }
+                    });
+                }).on('error', (error) => {
+                    reject(error);
+                });
             });
-        }).on('error', (error) => {
-            console.error('❌ Error fetching map tile:', error);
-            reject(error);
-        });
-    });
+
+            console.log(`✅ Map tile fetched from ${service.name} (${buffer.length} bytes)`);
+            return buffer;
+        } catch (error) {
+            console.warn(`⚠️ ${service.name} failed: ${error.message}`);
+            // Continue to next service
+        }
+    }
+
+    // If all services failed, throw error
+    throw new Error('All map tile services failed');
 }
 
 /**
