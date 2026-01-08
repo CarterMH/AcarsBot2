@@ -54,15 +54,18 @@ client.once(Events.ClientReady, readyClient => {
     announcementService = new AnnouncementService(client);
     quoteService = new QuoteService(client);
     
-    // Set up rotating bot status
+    // Set up rotating bot status (ACARS / aviation themed, slightly comedic)
     const statuses = [
-        { name: 'COMPANY MSG 📧', type: ActivityType.Watching },
-        { name: 'the announcements 📢', type: ActivityType.Watching },
-        { name: 'messages ✉️', type: ActivityType.Listening },
-        { name: 'with Discord 🎮', type: ActivityType.Playing },
-        { name: 'the community 👥', type: ActivityType.Watching },
-        { name: 'ACARS Systems 🛫', type: ActivityType.Watching },
-        { name: 'inspiring quotes 💡', type: ActivityType.Watching },
+        { name: 'COMPANY MSG: SLOW DOWN ✈️', type: ActivityType.Watching },
+        { name: 'COMPANY MSG: YOU’RE LATE ⏰', type: ActivityType.Watching },
+        { name: 'COMPANY MSG: WHERE’S THE PAPERWORK? 📑', type: ActivityType.Watching },
+        { name: 'ACARS: “ARE WE THERE YET?” 🧳', type: ActivityType.Listening },
+        { name: 'dispatch yelling about block times 📡', type: ActivityType.Listening },
+        { name: 'fuel numbers for the 5th time ⛽', type: ActivityType.Watching },
+        { name: 'last minute gate changes 🎫', type: ActivityType.Watching },
+        { name: 'late pushes like it’s normal 😅', type: ActivityType.Watching },
+        { name: 'company messages so you don’t have to 💼', type: ActivityType.Watching },
+        { name: 'your ETD slip away into the sunset 🌇', type: ActivityType.Watching },
     ];
     
     let statusIndex = 0;
