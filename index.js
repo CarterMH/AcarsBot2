@@ -95,8 +95,8 @@ function getZoomForAltitude(altitude) {
 }
 
 /**
- * Fetch a static map image using LocationIQ free static map API.
- * LocationIQ allows embedding and complies with OpenStreetMap usage policies.
+ * Fetch a static map image using Stamen Maps terrain tiles.
+ * Stamen Maps is free, allows embedding, and complies with usage policies.
  */
 async function fetchMapImage(latitude, longitude, altitude, callsign) {
     // Handle string/number conversion
@@ -108,78 +108,37 @@ async function fetchMapImage(latitude, longitude, altitude, callsign) {
     }
 
     const zoom = getZoomForAltitude(altitude !== null && altitude !== undefined ? Number(altitude) : 0);
-    const width = 600;
-    const height = 400;
 
-    // LocationIQ free static map API - no API key required for basic usage
-    // Format: https://maps.locationiq.com/v3/staticmap?key=YOUR_KEY&center=lat,lon&zoom=Z&size=WxH&markers=icon:small-red|lat,lon
-    // For free tier, we can use their public endpoint without key for basic maps
-    // Note: LocationIQ requires attribution but allows embedding
+    // Use Stamen Maps terrain tiles - free, no API key, allows embedding
+    // Calculate tile coordinates from lat/lon
+    const n = Math.pow(2, zoom);
+    const tileX = Math.floor((lonNum + 180) / 360 * n);
+    const tileY = Math.floor((1 - Math.log(Math.tan(latNum * Math.PI / 180) + 1 / Math.cos(latNum * Math.PI / 180)) / Math.PI) / 2 * n);
     
-    // Try LocationIQ static map (may require free API key, but let's try public endpoint first)
-    // If this doesn't work, we'll fall back to a simple approach
-    const locationIqUrl = `https://maps.locationiq.com/v3/staticmap?key=pk.0&center=${latNum},${lonNum}&zoom=${zoom}&size=${width}x${height}&markers=icon:small-red|${latNum},${lonNum}`;
+    // Stamen Maps terrain tiles - free and allows embedding
+    const stamenUrl = `https://stamen-tiles.a.ssl.fastly.net/terrain/${zoom}/${tileX}/${tileY}.png`;
 
-    console.log(`🗺️ Fetching map image for ${callsign || 'flight'}`);
-    console.log(`   Coordinates: lat=${latNum}, lon=${lonNum}, zoom=${zoom}`);
-    console.log(`   Using LocationIQ static map API`);
+    console.log(`🗺️ Fetching map tile for ${callsign || 'flight'}`);
+    console.log(`   Coordinates: lat=${latNum}, lon=${lonNum}, zoom=${zoom}, tile: ${tileX}/${tileY}`);
+    console.log(`   URL: ${stamenUrl}`);
 
     return new Promise((resolve, reject) => {
-        https.get(locationIqUrl, (res) => {
+        https.get(stamenUrl, (res) => {
             if (res.statusCode !== 200) {
-                // If LocationIQ fails, try using a simple tile-based approach with proper attribution
-                console.warn(`⚠️ LocationIQ returned status ${res.statusCode}, trying alternative...`);
-                
-                // Fallback: Use a simple approach with Stamen Maps (allows embedding)
-                const stamenUrl = `https://stamen-tiles.a.ssl.fastly.net/terrain/${zoom}/${Math.floor((lonNum + 180) / 360 * Math.pow(2, zoom))}/${Math.floor((1 - Math.log(Math.tan(latNum * Math.PI / 180) + 1 / Math.cos(latNum * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom))}.png`;
-                
-                https.get(stamenUrl, (stamenRes) => {
-                    if (stamenRes.statusCode !== 200) {
-                        console.error(`❌ Stamen Maps returned status ${stamenRes.statusCode}`);
-                        return reject(new Error(`Map service returned status ${stamenRes.statusCode}`));
-                    }
-                    
-                    const chunks = [];
-                    stamenRes.on('data', (chunk) => chunks.push(chunk));
-                    stamenRes.on('end', () => {
-                        const buffer = Buffer.concat(chunks);
-                        console.log(`✅ Map tile fetched from Stamen Maps (${buffer.length} bytes)`);
-                        resolve(buffer);
-                    });
-                }).on('error', (error) => {
-                    console.error('❌ Error fetching map from Stamen:', error);
-                    reject(error);
-                });
-                return;
+                console.error(`❌ Stamen Maps returned status ${res.statusCode}`);
+                return reject(new Error(`Stamen Maps returned status ${res.statusCode}`));
             }
 
             const chunks = [];
             res.on('data', (chunk) => chunks.push(chunk));
             res.on('end', () => {
                 const buffer = Buffer.concat(chunks);
-                console.log(`✅ Map image fetched from LocationIQ (${buffer.length} bytes)`);
+                console.log(`✅ Map tile fetched from Stamen Maps (${buffer.length} bytes)`);
                 resolve(buffer);
             });
         }).on('error', (error) => {
-            console.error('❌ Error fetching map from LocationIQ:', error);
-            // Try Stamen Maps as fallback
-            const stamenUrl = `https://stamen-tiles.a.ssl.fastly.net/terrain/${zoom}/${Math.floor((lonNum + 180) / 360 * Math.pow(2, zoom))}/${Math.floor((1 - Math.log(Math.tan(latNum * Math.PI / 180) + 1 / Math.cos(latNum * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom))}.png`;
-            
-            https.get(stamenUrl, (stamenRes) => {
-                if (stamenRes.statusCode !== 200) {
-                    return reject(new Error(`Fallback map service failed: ${stamenRes.statusCode}`));
-                }
-                
-                const chunks = [];
-                stamenRes.on('data', (chunk) => chunks.push(chunk));
-                stamenRes.on('end', () => {
-                    const buffer = Buffer.concat(chunks);
-                    console.log(`✅ Map tile fetched from Stamen Maps (fallback, ${buffer.length} bytes)`);
-                    resolve(buffer);
-                });
-            }).on('error', (error) => {
-                reject(error);
-            });
+            console.error('❌ Error fetching map tile from Stamen Maps:', error);
+            reject(error);
         });
     });
 }
@@ -290,27 +249,38 @@ async function sendFlightStatusEmbed(type, flight, options = {}) {
 
     // Fetch and attach map image if we have coordinates
     let mapAttachment = null;
-    if (latitudeNum !== null && longitudeNum !== null) {
+    if (latitudeNum !== null && longitudeNum !== null && !Number.isNaN(latitudeNum) && !Number.isNaN(longitudeNum)) {
         try {
+            console.log(`🗺️ Attempting to fetch map for ${callsign} at ${latitudeNum}, ${longitudeNum}`);
             const mapBuffer = await fetchMapImage(latitudeNum, longitudeNum, altitudeNum, callsign);
-            if (mapBuffer) {
+            if (mapBuffer && mapBuffer.length > 0) {
                 mapAttachment = new AttachmentBuilder(mapBuffer, { name: 'map.png' });
                 embed.setImage('attachment://map.png');
-                console.log(`✅ Map image attached for ${callsign}`);
+                console.log(`✅ Map image attached for ${callsign} (${mapBuffer.length} bytes)`);
+            } else {
+                console.warn(`⚠️ Map buffer is empty for ${callsign}`);
             }
         } catch (error) {
             console.error(`❌ Failed to fetch map image for ${callsign}:`, error.message);
+            console.error(`   Full error:`, error);
         }
+    } else {
+        console.log(`⚠️ Skipping map for ${callsign} - invalid coordinates: lat=${latitudeNum}, lon=${longitudeNum}`);
     }
 
     try {
         const messageOptions = { embeds: [embed] };
         if (mapAttachment) {
             messageOptions.files = [mapAttachment];
+            console.log(`📎 Sending message with map attachment for ${callsign}`);
+        } else {
+            console.log(`📤 Sending message without map for ${callsign}`);
         }
         await channel.send(messageOptions);
+        console.log(`✅ Flight status message sent for ${callsign}`);
     } catch (err) {
         console.error('❌ Failed to send flight status embed:', err);
+        console.error('   Error details:', err.message);
     }
 }
 
