@@ -88,9 +88,11 @@ client.once(Events.ClientReady, readyClient => {
     const QUOTE_CHANNEL_ID = '800272062630854667';
     const sendQuote = async () => {
         try {
+            console.log(`Attempting to send inspirational quote to channel ${QUOTE_CHANNEL_ID}...`);
             await quoteService.sendQuote(QUOTE_CHANNEL_ID);
         } catch (error) {
-            console.error('Error sending inspirational quote:', error);
+            console.error(`❌ Error sending inspirational quote to ${QUOTE_CHANNEL_ID}:`, error.message);
+            console.error('Full error:', error);
         }
     };
     

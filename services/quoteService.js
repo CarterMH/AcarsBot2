@@ -67,10 +67,20 @@ class QuoteService {
         const quote = this.getRandomQuote();
         const [quoteText, author] = quote.split(' - ');
 
-        // Get the channel
-        const channel = this.client.channels.cache.get(channelId);
+        // Get the channel - try cache first, then fetch if not found
+        let channel = this.client.channels.cache.get(channelId);
         if (!channel) {
-            throw new Error(`Channel with ID ${channelId} not found`);
+            try {
+                channel = await this.client.channels.fetch(channelId);
+                console.log(`Fetched channel ${channelId} from Discord API`);
+            } catch (fetchError) {
+                throw new Error(`Channel with ID ${channelId} not found or not accessible: ${fetchError.message}`);
+            }
+        }
+
+        // Verify channel is text-based
+        if (!channel.isTextBased()) {
+            throw new Error(`Channel ${channelId} is not a text channel`);
         }
 
         // Create embed with styled quote
@@ -82,9 +92,14 @@ class QuoteService {
             .setTimestamp();
 
         // Send the quote
-        const sentMessage = await channel.send({ embeds: [embed] });
-        console.log(`Inspirational quote sent to channel ${channelId}`);
-        return sentMessage;
+        try {
+            const sentMessage = await channel.send({ embeds: [embed] });
+            console.log(`✅ Inspirational quote sent to channel ${channelId} (${channel.name || 'Unknown'})`);
+            return sentMessage;
+        } catch (sendError) {
+            console.error(`Failed to send quote to channel ${channelId}:`, sendError);
+            throw new Error(`Failed to send message to channel: ${sendError.message}`);
+        }
     }
 }
 
