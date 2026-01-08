@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: acars-discord-bot
+    container_name: acarsbot2
     restart: unless-stopped
     ports:
       - "3000:3000"
