@@ -35,30 +35,34 @@ async function fetchMapImage(latitude, longitude, altitude, callsign) {
     const width = 600;
     const height = 400;
 
-    // Build OpenStreetMap static map URL
-    const center = `${latNum},${lonNum}`;
-    const markerParam = `${latNum},${lonNum},red-pushpin`;
-    const osmUrl = `https://staticmap.openstreetmap.de/staticmap.php?center=${center}&zoom=${zoom}&size=${width}x${height}&markers=${markerParam}`;
+    // Use OpenStreetMap tile service - more reliable than static map service
+    // Calculate tile coordinates from lat/lon
+    const n = Math.pow(2, zoom);
+    const tileX = Math.floor((lonNum + 180) / 360 * n);
+    const tileY = Math.floor((1 - Math.log(Math.tan(latNum * Math.PI / 180) + 1 / Math.cos(latNum * Math.PI / 180)) / Math.PI) / 2 * n);
+    
+    // Use OpenStreetMap tile service - this is more reliable
+    const tileUrl = `https://tile.openstreetmap.org/${zoom}/${tileX}/${tileY}.png`;
 
-    console.log(`🗺️ Fetching map image for ${callsign || 'flight'}: ${osmUrl}`);
-    console.log(`   Coordinates: lat=${latNum}, lon=${lonNum}, zoom=${zoom}`);
+    console.log(`🗺️ Fetching map tile for ${callsign || 'flight'}: ${tileUrl}`);
+    console.log(`   Coordinates: lat=${latNum}, lon=${lonNum}, zoom=${zoom}, tile: ${tileX}/${tileY}`);
 
     return new Promise((resolve, reject) => {
-        https.get(osmUrl, (res) => {
+        https.get(tileUrl, (res) => {
             if (res.statusCode !== 200) {
-                console.error(`❌ OpenStreetMap returned status ${res.statusCode}`);
-                return reject(new Error(`OpenStreetMap returned status ${res.statusCode}`));
+                console.error(`❌ OpenStreetMap tile returned status ${res.statusCode}`);
+                return reject(new Error(`OpenStreetMap tile returned status ${res.statusCode}`));
             }
 
             const chunks = [];
             res.on('data', (chunk) => chunks.push(chunk));
             res.on('end', () => {
                 const buffer = Buffer.concat(chunks);
-                console.log(`✅ Map image fetched successfully (${buffer.length} bytes)`);
+                console.log(`✅ Map tile fetched successfully (${buffer.length} bytes)`);
                 resolve(buffer);
             });
         }).on('error', (error) => {
-            console.error('❌ Error fetching map image:', error);
+            console.error('❌ Error fetching map tile:', error);
             reject(error);
         });
     });
