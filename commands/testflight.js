@@ -1,5 +1,6 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const { createClient } = require('@supabase/supabase-js');
+const https = require('https');
 require('dotenv').config();
 
 /**
@@ -16,10 +17,10 @@ function getZoomForAltitude(altitude) {
 }
 
 /**
- * Build a static map URL centered on the aircraft with an airline-style marker.
- * Uses OpenStreetMap static map service that returns a direct PNG image.
+ * Fetch a static map image from OpenStreetMap and return it as a buffer.
+ * This avoids needing a public URL - we download and attach the image directly.
  */
-function buildFlightMapUrl(latitude, longitude, altitude, callsign) {
+async function fetchMapImage(latitude, longitude, altitude, callsign) {
     // Handle string/number conversion
     const latNum = latitude !== null && latitude !== undefined ? Number(latitude) : null;
     const lonNum = longitude !== null && longitude !== undefined ? Number(longitude) : null;
@@ -33,19 +34,34 @@ function buildFlightMapUrl(latitude, longitude, altitude, callsign) {
     const zoom = getZoomForAltitude(altNum);
     const width = 600;
     const height = 400;
-    
-    // Use proxy endpoint if available, otherwise fallback to direct URL
-    const PORT = process.env.PORT || 3000;
-    const MAP_PROXY_BASE_URL = process.env.MAP_PROXY_BASE_URL || `http://localhost:${PORT}`;
-    
-    // Build proxy URL - our server will fetch the OpenStreetMap image and serve it as PNG
-    const mapUrl = `${MAP_PROXY_BASE_URL}/api/map?lat=${latNum}&lon=${lonNum}&zoom=${zoom}&width=${width}&height=${height}`;
-    
-    // Debug logging
-    console.log(`🗺️ Generated map proxy URL for ${callsign || 'flight'}: ${mapUrl}`);
+
+    // Build OpenStreetMap static map URL
+    const center = `${latNum},${lonNum}`;
+    const markerParam = `${latNum},${lonNum},red-pushpin`;
+    const osmUrl = `https://staticmap.openstreetmap.de/staticmap.php?center=${center}&zoom=${zoom}&size=${width}x${height}&markers=${markerParam}`;
+
+    console.log(`🗺️ Fetching map image for ${callsign || 'flight'}: ${osmUrl}`);
     console.log(`   Coordinates: lat=${latNum}, lon=${lonNum}, zoom=${zoom}`);
-    
-    return mapUrl;
+
+    return new Promise((resolve, reject) => {
+        https.get(osmUrl, (res) => {
+            if (res.statusCode !== 200) {
+                console.error(`❌ OpenStreetMap returned status ${res.statusCode}`);
+                return reject(new Error(`OpenStreetMap returned status ${res.statusCode}`));
+            }
+
+            const chunks = [];
+            res.on('data', (chunk) => chunks.push(chunk));
+            res.on('end', () => {
+                const buffer = Buffer.concat(chunks);
+                console.log(`✅ Map image fetched successfully (${buffer.length} bytes)`);
+                resolve(buffer);
+            });
+        }).on('error', (error) => {
+            console.error('❌ Error fetching map image:', error);
+            reject(error);
+        });
+    });
 }
 
 /**
@@ -103,15 +119,6 @@ function createFlightEmbed(flight) {
 
     if (engineInfoParts.length > 0) {
         embed.addFields({ name: 'Engine Info', value: engineInfoParts.join('\n') });
-    }
-
-    // Add map if coordinates provided
-    const mapUrl = buildFlightMapUrl(latitudeNum, longitudeNum, altitudeNum, callsign);
-    if (mapUrl) {
-        console.log(`✅ Adding map image to embed for ${callsign}: ${mapUrl}`);
-        embed.setImage(mapUrl);
-    } else {
-        console.log(`❌ No map URL generated for ${callsign} - lat: ${latitudeNum}, lon: ${longitudeNum}`);
     }
 
     return embed;
@@ -181,7 +188,32 @@ module.exports = {
             for (const flight of data) {
                 try {
                     const embed = createFlightEmbed(flight);
-                    await channel.send({ embeds: [embed] });
+                    
+                    // Fetch and attach map image if coordinates are available
+                    let mapAttachment = null;
+                    const latitudeNum = flight.latitude !== null && flight.latitude !== undefined ? Number(flight.latitude) : null;
+                    const longitudeNum = flight.longitude !== null && flight.longitude !== undefined ? Number(flight.longitude) : null;
+                    const altitudeNum = flight.altitude !== null && flight.altitude !== undefined ? Number(flight.altitude) : null;
+                    
+                    if (latitudeNum !== null && longitudeNum !== null) {
+                        try {
+                            const mapBuffer = await fetchMapImage(latitudeNum, longitudeNum, altitudeNum, flight.callsign || 'Unknown');
+                            if (mapBuffer) {
+                                mapAttachment = new AttachmentBuilder(mapBuffer, { name: 'map.png' });
+                                embed.setImage('attachment://map.png');
+                                console.log(`✅ Map image attached for ${flight.callsign || flight.id}`);
+                            }
+                        } catch (error) {
+                            console.error(`❌ Failed to fetch map image for ${flight.callsign || flight.id}:`, error.message);
+                        }
+                    }
+                    
+                    const messageOptions = { embeds: [embed] };
+                    if (mapAttachment) {
+                        messageOptions.files = [mapAttachment];
+                    }
+                    
+                    await channel.send(messageOptions);
                     successCount++;
                 } catch (err) {
                     console.error(`❌ Failed to send embed for flight ${flight.callsign || flight.id}:`, err);
