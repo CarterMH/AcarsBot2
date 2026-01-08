@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, Collection, Events, ActivityType } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, Events, ActivityType, EmbedBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
@@ -126,15 +126,35 @@ client.on(Events.MessageCreate, async message => {
     // Log the DM
     console.log(`📩 DM received from ${message.author.tag} (${message.author.id}): ${message.content}`);
     
-    // You can add custom DM handling logic here
-    // For example, auto-reply, forward to a channel, etc.
+    // Forward DM to the dm-responses channel
+    const DM_RESPONSE_CHANNEL_ID = process.env.DM_RESPONSE_CHANNEL_ID || '1458694568626356316'; // dm-responses channel
     
-    // Example: Auto-reply to DMs (optional - remove if not needed)
     try {
-        // You can customize this response or remove it entirely
-        // await message.reply('Thanks for your message! I received it.');
+        const responseChannel = client.channels.cache.get(DM_RESPONSE_CHANNEL_ID);
+        if (!responseChannel) {
+            console.error(`❌ DM response channel ${DM_RESPONSE_CHANNEL_ID} not found. Make sure the bot has access to this channel.`);
+            return;
+        }
+
+        // Create embed for the forwarded DM
+        const embed = new EmbedBuilder()
+            .setTitle('📩 Incoming DM')
+            .setDescription(`**From:** ${message.author.tag} (${message.author.id})\n**Message:**\n${message.content || '*No text content*'}`)
+            .setColor(0x5865F2) // Blurple
+            .setTimestamp()
+            .setFooter({ text: 'ACARS Bot DM Forward' })
+            .setThumbnail(message.author.displayAvatarURL({ dynamic: true }));
+
+        // If there are attachments, mention them
+        if (message.attachments.size > 0) {
+            const attachmentList = message.attachments.map(att => `[${att.name}](${att.url})`).join('\n');
+            embed.addFields({ name: 'Attachments', value: attachmentList });
+        }
+
+        await responseChannel.send({ embeds: [embed] });
+        console.log(`✅ Forwarded DM from ${message.author.tag} to channel ${DM_RESPONSE_CHANNEL_ID}`);
     } catch (error) {
-        console.error('Error handling DM:', error);
+        console.error('❌ Error forwarding DM to channel:', error);
     }
 });
 
