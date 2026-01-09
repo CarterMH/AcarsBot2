@@ -21,6 +21,7 @@ services:
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
       - PORT=${PORT:-3000}
+      - MAP_PROXY_BASE_URL=${MAP_PROXY_BASE_URL}
     networks:
       - acars-network
 

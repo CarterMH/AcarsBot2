@@ -77,7 +77,7 @@ const CRASH_DESCENT_THRESHOLD_FT = 10000; // Detect crash if descending more tha
 const CRASH_TIME_WINDOW_MS = 60 * 1000; // Within this time window (1 minute)
 
 const FLIGHT_STATUS_CHANNEL_ID = process.env.FLIGHT_STATUS_CHANNEL_ID || '1458721716002881789';
-const FLIGHT_POLL_INTERVAL_MS = Number(process.env.FLIGHT_POLL_INTERVAL_MS || 15000);
+const FLIGHT_POLL_INTERVAL_MS = Number(process.env.FLIGHT_POLL_INTERVAL_MS || 300000); // Default: 5 minutes (300000 ms)
 
 /**
  * Determine a simple flight phase from altitude.
@@ -404,7 +404,7 @@ async function pollActiveFlights() {
         }
 
         // Early return if there are no active flights - don't send any updates
-        if (data.length === 0) {
+        if (!data || data.length === 0) {
             // Clean up any stale flight states if no flights are active
             if (flightState.size > 0) {
                 console.log(`🧹 No active flights found, cleaning up ${flightState.size} stale flight states`);
@@ -413,12 +413,27 @@ async function pollActiveFlights() {
             return;
         }
 
+        // Filter out any invalid flights (must have a valid ID)
+        const validFlights = data.filter(flight => {
+            const id = flight.id || flight.uuid || flight.callsign;
+            return id !== null && id !== undefined && id !== '';
+        });
+
+        // If no valid flights after filtering, clean up and return
+        if (validFlights.length === 0) {
+            if (flightState.size > 0) {
+                console.log(`🧹 No valid active flights found after filtering, cleaning up ${flightState.size} stale flight states`);
+                flightState.clear();
+            }
+            return;
+        }
+
         // Track which flights we saw this poll, for cleanup
         const seenIds = new Set();
 
-        for (const flight of data) {
+        for (const flight of validFlights) {
             const id = flight.id || flight.uuid || flight.callsign;
-            if (!id) continue;
+            if (!id) continue; // Extra safety check
 
             seenIds.add(id);
 
