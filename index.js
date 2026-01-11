@@ -1,6 +1,15 @@
-// IMPORTANT: Load @discordjs/opus FIRST - it should automatically provide encryption support
+// Check if Node.js supports aes-256-gcm encryption
+const crypto = require('node:crypto');
+const hasAes256Gcm = crypto.getCiphers().includes('aes-256-gcm');
+console.log(`Node.js aes-256-gcm support: ${hasAes256Gcm}`);
+
+// Load @discordjs/opus
 require('@discordjs/opus');
 console.log('✅ @discordjs/opus loaded successfully');
+
+// Generate dependency report to see what's installed
+const { generateDependencyReport } = require('@discordjs/voice');
+console.log('\n' + generateDependencyReport() + '\n');
 
 const { Client, GatewayIntentBits, Collection, Events, ActivityType, EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const fs = require('fs');
