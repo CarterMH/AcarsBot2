@@ -1,8 +1,8 @@
 // IMPORTANT: Load and initialize encryption libraries FIRST before any other voice-related modules
-// CRITICAL: libsodium-wrappers MUST be initialized with load() before @discordjs/voice can use encryption
-const { load } = require('libsodium-wrappers');
+// CRITICAL: libsodium-wrappers MUST be initialized before @discordjs/voice can use encryption
+const sodium = require('libsodium-wrappers');
 
-load().then(() => {
+sodium.ready.then(() => {
     require('@discordjs/opus');
     console.log('✅ libsodium-wrappers initialized and @discordjs/opus loaded successfully');
     // Continue with bot initialization
