@@ -1,13 +1,14 @@
 # Use Node.js LTS version (Debian-based for native module support)
 FROM node:20-slim
 
-# Install build dependencies, opus libraries, and ffmpeg
+# Install build dependencies, opus libraries, libsodium (runtime), and ffmpeg
 RUN apt-get update && apt-get install -y \
     python3 \
     make \
     g++ \
     libopus-dev \
     libsodium-dev \
+    libsodium23 \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 

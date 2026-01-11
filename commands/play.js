@@ -4,6 +4,13 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
+// Verify opus encoder is available
+const opus = require('@discordjs/opus');
+if (!opus) {
+    throw new Error('@discordjs/opus failed to load');
+}
+console.log('Opus encoder verified in play command');
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('play')
