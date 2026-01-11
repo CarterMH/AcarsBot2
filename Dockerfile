@@ -1,5 +1,13 @@
-# Use Node.js LTS version
-FROM node:20-alpine
+# Use Node.js LTS version (Debian-based for native module support)
+FROM node:20-slim
+
+# Install build dependencies and ffmpeg
+RUN apt-get update && apt-get install -y \
+    python3 \
+    make \
+    g++ \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
@@ -7,7 +15,7 @@ WORKDIR /app
 # Copy package files
 COPY package.json ./
 
-# Install dependencies (ignore package-lock.json if out of sync)
+# Install dependencies
 RUN npm install --only=production --no-package-lock
 
 # Copy application files
@@ -17,8 +25,8 @@ COPY . .
 RUN chmod +x docker-entrypoint.sh
 
 # Create a non-root user for security
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+RUN groupadd -r -g 1001 nodejs && \
+    useradd -r -u 1001 -g nodejs nodejs
 
 # Change ownership of the app directory
 RUN chown -R nodejs:nodejs /app
@@ -30,7 +38,6 @@ USER nodejs
 EXPOSE 3000
 
 # Health check to ensure the bot is running
-# Check if the Express server is responding (any response means server is up)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000', (r) => {process.exit(r ? 0 : 1)}).on('error', () => process.exit(1))"
 
