@@ -18,8 +18,8 @@ WORKDIR /app
 # Copy package files
 COPY package.json ./
 
-# Install dependencies
-RUN npm install --only=production --no-package-lock
+# Install ALL dependencies (needed for sodium to compile native bindings)
+RUN npm install --no-package-lock
 
 # Copy application files
 COPY . .
