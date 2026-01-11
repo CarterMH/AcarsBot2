@@ -1,16 +1,15 @@
-# Use Node.js LTS version (Debian-based for better native module support)
-FROM node:20-slim
+# Use Node.js LTS version
+FROM node:20-alpine
 
 # Install build dependencies for native modules
-RUN apt-get update && apt-get install -y \
+RUN apk add --no-cache \
     python3 \
     make \
     g++ \
     autoconf \
     automake \
     libtool \
-    nasm \
-    && rm -rf /var/lib/apt/lists/*
+    nasm
 
 # Set working directory
 WORKDIR /app
@@ -19,7 +18,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm install --only=production --no-audit --no-fund
+RUN npm install --only=production
 
 # Copy application files
 COPY . .
@@ -28,8 +27,8 @@ COPY . .
 RUN chmod +x docker-entrypoint.sh
 
 # Create a non-root user for security
-RUN groupadd -r -g 1001 nodejs && \
-    useradd -r -u 1001 -g nodejs nodejs
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
 
 # Change ownership of the app directory
 RUN chown -R nodejs:nodejs /app
