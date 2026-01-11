@@ -1,14 +1,6 @@
 # Use Node.js LTS version
 FROM node:20-alpine
 
-# Install build dependencies for native modules and ffmpeg
-RUN apk add --no-cache \
-    python3 \
-    make \
-    g++ \
-    libc6-compat \
-    ffmpeg
-
 # Set working directory
 WORKDIR /app
 
