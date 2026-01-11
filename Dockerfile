@@ -18,8 +18,8 @@ WORKDIR /app
 # Copy package files
 COPY package.json ./
 
-# Install ALL dependencies (needed for sodium to compile native bindings)
-RUN npm install --no-package-lock
+# Install dependencies (@stablelib/xchacha20poly1305 is pure TypeScript, no native compilation needed)
+RUN npm install --only=production --no-package-lock
 
 # Copy application files
 COPY . .
