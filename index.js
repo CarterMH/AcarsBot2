@@ -1,3 +1,12 @@
+// IMPORTANT: Load @discordjs/opus FIRST before any other voice-related modules
+try {
+    require('@discordjs/opus');
+    console.log('✅ @discordjs/opus loaded successfully');
+} catch (error) {
+    console.error('❌ Failed to load @discordjs/opus:', error);
+    throw error;
+}
+
 const { Client, GatewayIntentBits, Collection, Events, ActivityType, EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
