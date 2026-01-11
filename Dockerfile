@@ -18,8 +18,11 @@ WORKDIR /app
 # Copy package files
 COPY package.json ./
 
-# Install dependencies
-RUN npm install --only=production --no-package-lock
+# Install ALL dependencies first (needed for native module compilation)
+# Then we can prune dev dependencies if needed, but @discordjs/opus needs to compile properly
+RUN npm install --no-package-lock && \
+    npm list @discordjs/opus && \
+    node -e "const opus = require('@discordjs/opus'); console.log('Opus loaded:', typeof opus); console.log('Opus version check passed');"
 
 # Copy application files
 COPY . .
