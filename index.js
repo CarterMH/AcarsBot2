@@ -1,18 +1,7 @@
-// IMPORTANT: Load and initialize encryption libraries FIRST before any other voice-related modules
-// CRITICAL: libsodium-wrappers MUST be initialized before @discordjs/voice can use encryption
-const sodium = require('libsodium-wrappers');
-
-sodium.ready.then(() => {
-    require('@discordjs/opus');
-    console.log('✅ libsodium-wrappers initialized and @discordjs/opus loaded successfully');
-    // Continue with bot initialization
-    initializeBot();
-}).catch((error) => {
-    console.error('❌ Failed to initialize encryption libraries:', error);
-    process.exit(1);
-});
-
-function initializeBot() {
+// IMPORTANT: Load encryption libraries FIRST before any other voice-related modules
+require('sodium-native');
+require('@discordjs/opus');
+console.log('✅ sodium-native and @discordjs/opus loaded successfully');
 
 const { Client, GatewayIntentBits, Collection, Events, ActivityType, EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const fs = require('fs');
@@ -1070,9 +1059,8 @@ function startWebServer() {
         process.exit(1);
     }
 
-    // Only attempt login if we have a token and we're not just building
-    client.login(token).catch(error => {
-        console.error('Failed to login to Discord:', error);
-        process.exit(1);
-    });
-}
+// Only attempt login if we have a token and we're not just building
+client.login(token).catch(error => {
+    console.error('Failed to login to Discord:', error);
+    process.exit(1);
+});
