@@ -1,12 +1,18 @@
-// IMPORTANT: Load encryption libraries FIRST before any other voice-related modules
-try {
+// IMPORTANT: Load and initialize encryption libraries FIRST before any other voice-related modules
+// CRITICAL: libsodium-wrappers MUST be initialized with load() before @discordjs/voice can use encryption
+const { load } = require('libsodium-wrappers');
+
+load().then(() => {
     require('@discordjs/opus');
-    require('libsodium-wrappers');
-    console.log('✅ @discordjs/opus and libsodium-wrappers loaded successfully');
-} catch (error) {
-    console.error('❌ Failed to load encryption libraries:', error);
-    throw error;
-}
+    console.log('✅ libsodium-wrappers initialized and @discordjs/opus loaded successfully');
+    // Continue with bot initialization
+    initializeBot();
+}).catch((error) => {
+    console.error('❌ Failed to initialize encryption libraries:', error);
+    process.exit(1);
+});
+
+function initializeBot() {
 
 const { Client, GatewayIntentBits, Collection, Events, ActivityType, EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const fs = require('fs');
@@ -1044,28 +1050,29 @@ function startWebServer() {
     });
 }
 
-// Login to Discord with your client's token
-// Check if we're in a build environment (Cloudflare, Vercel, etc.)
-const isBuildEnv = process.env.CI || process.env.CF_PAGES || process.env.VERCEL || process.env.NETLIFY || process.env.CF_PAGES_BRANCH;
+    // Login to Discord with your client's token
+    // Check if we're in a build environment (Cloudflare, Vercel, etc.)
+    const isBuildEnv = process.env.CI || process.env.CF_PAGES || process.env.VERCEL || process.env.NETLIFY || process.env.CF_PAGES_BRANCH;
 
-// If this is a Cloudflare build, don't start the bot - the worker.js handles API requests
-if (isBuildEnv) {
-    console.log('Build environment detected - skipping Discord bot startup');
-    console.log('For Cloudflare Workers, use worker.js instead of index.js');
-    // Exit successfully so build doesn't fail
-    process.exit(0);
+    // If this is a Cloudflare build, don't start the bot - the worker.js handles API requests
+    if (isBuildEnv) {
+        console.log('Build environment detected - skipping Discord bot startup');
+        console.log('For Cloudflare Workers, use worker.js instead of index.js');
+        // Exit successfully so build doesn't fail
+        process.exit(0);
+    }
+
+    const token = process.env.DISCORD_TOKEN;
+    if (!token) {
+        console.error('ERROR: DISCORD_TOKEN is not set!');
+        console.error('Please set DISCORD_TOKEN in your environment variables.');
+        console.error('For local development: Add it to your .env file');
+        process.exit(1);
+    }
+
+    // Only attempt login if we have a token and we're not just building
+    client.login(token).catch(error => {
+        console.error('Failed to login to Discord:', error);
+        process.exit(1);
+    });
 }
-
-const token = process.env.DISCORD_TOKEN;
-if (!token) {
-    console.error('ERROR: DISCORD_TOKEN is not set!');
-    console.error('Please set DISCORD_TOKEN in your environment variables.');
-    console.error('For local development: Add it to your .env file');
-    process.exit(1);
-}
-
-// Only attempt login if we have a token and we're not just building
-client.login(token).catch(error => {
-    console.error('Failed to login to Discord:', error);
-    process.exit(1);
-});
