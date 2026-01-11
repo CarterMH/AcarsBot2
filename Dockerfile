@@ -1,16 +1,8 @@
 # Use Node.js LTS version
 FROM node:20-alpine
 
-# Install build dependencies and ffmpeg for native modules
-RUN apk add --no-cache \
-    python3 \
-    make \
-    g++ \
-    autoconf \
-    automake \
-    libtool \
-    nasm \
-    ffmpeg
+# Install ffmpeg for audio processing
+RUN apk add --no-cache ffmpeg
 
 # Set working directory
 WORKDIR /app

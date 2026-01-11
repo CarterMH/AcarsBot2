@@ -4,9 +4,6 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
-// Use system ffmpeg (installed via Alpine package manager)
-const ffmpegPath = 'ffmpeg';
-
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('play')
@@ -26,7 +23,7 @@ module.exports = {
         const channel = interaction.options.getChannel('channel');
         const filePath = interaction.options.getString('file') || 'Johncena.mp3';
 
-        // Resolve file path (relative to bot directory if relative, absolute if absolute)
+        // Resolve file path
         const resolvedPath = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
 
         // Check if file exists
@@ -50,40 +47,44 @@ module.exports = {
             // Create audio player
             const player = createAudioPlayer();
 
-            // Create audio resource using FFmpeg to convert MP3 to Opus
-            const resource = createAudioResource(
-                spawn(ffmpegPath, [
-                    '-i', resolvedPath,
-                    '-f', 'opus',
-                    '-ar', '48000',
-                    '-ac', '2',
-                    'pipe:1'
-                ], { stdio: ['ignore', 'pipe', 'ignore'] }).stdout,
-                {
-                    inputType: 'opus',
-                }
-            );
+            // Create FFmpeg process to convert MP3 to Opus
+            const ffmpegProcess = spawn('ffmpeg', [
+                '-i', resolvedPath,
+                '-f', 'opus',
+                '-ar', '48000',
+                '-ac', '2',
+                'pipe:1'
+            ], {
+                stdio: ['ignore', 'pipe', 'ignore']
+            });
+
+            // Create audio resource
+            const resource = createAudioResource(ffmpegProcess.stdout, {
+                inputType: 'opus',
+            });
 
             // Play the audio
             player.play(resource);
 
+            // Subscribe the connection to the player
+            connection.subscribe(player);
+
             // Handle when playback finishes
             player.on(AudioPlayerStatus.Idle, () => {
-                // Disconnect from voice channel
                 try {
                     connection.destroy();
-                    interaction.editReply(`✅ Finished playing \`${path.basename(resolvedPath)}\` in ${channel.name} and left the channel.`).catch(err => console.error('Error editing reply:', err));
+                    interaction.editReply(`✅ Finished playing \`${path.basename(resolvedPath)}\` in ${channel.name} and left the channel.`).catch(console.error);
                 } catch (error) {
                     console.error('Error in idle handler:', error);
                 }
             });
 
-            // Handle errors
+            // Handle player errors
             player.on('error', (error) => {
                 console.error('Audio player error:', error);
                 try {
                     connection.destroy();
-                    interaction.editReply(`❌ Error playing audio: ${error.message}`).catch(err => console.error('Error editing reply:', err));
+                    interaction.editReply(`❌ Error playing audio: ${error.message}`).catch(console.error);
                 } catch (err) {
                     console.error('Error in error handler:', err);
                 }
@@ -94,13 +95,11 @@ module.exports = {
                 console.error('Voice connection error:', error);
                 try {
                     connection.destroy();
-                    interaction.editReply(`❌ Connection error: ${error.message}`).catch(err => console.error('Error editing reply:', err));
+                    interaction.editReply(`❌ Connection error: ${error.message}`).catch(console.error);
                 } catch (err) {
                     console.error('Error handling connection error:', err);
                 }
             });
-
-            connection.subscribe(player);
 
             await interaction.editReply(`🎵 Now playing \`${path.basename(resolvedPath)}\` in ${channel.name}...`);
 
