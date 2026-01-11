@@ -1,8 +1,8 @@
 // IMPORTANT: Load encryption libraries FIRST before any other voice-related modules
 try {
     require('@discordjs/opus');
-    require('sodium-native');
-    console.log('✅ @discordjs/opus and sodium-native loaded successfully');
+    require('libsodium-wrappers');
+    console.log('✅ @discordjs/opus and libsodium-wrappers loaded successfully');
 } catch (error) {
     console.error('❌ Failed to load encryption libraries:', error);
     throw error;
