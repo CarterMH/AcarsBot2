@@ -4,6 +4,15 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
+// Explicitly require @discordjs/opus to ensure it's loaded
+try {
+    require('@discordjs/opus');
+    console.log('@discordjs/opus loaded successfully');
+} catch (error) {
+    console.error('Failed to load @discordjs/opus:', error);
+    throw new Error('@discordjs/opus is required but failed to load. The voice functionality will not work.');
+}
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('play')
