@@ -1,15 +1,3 @@
-// Check if Node.js supports aes-256-gcm encryption
-const crypto = require('node:crypto');
-const hasAes256Gcm = crypto.getCiphers().includes('aes-256-gcm');
-console.log(`Node.js aes-256-gcm support: ${hasAes256Gcm}`);
-
-// Load @discordjs/opus
-require('@discordjs/opus');
-console.log('✅ @discordjs/opus loaded successfully');
-
-// Generate dependency report to see what's installed
-const { generateDependencyReport } = require('@discordjs/voice');
-console.log('\n' + generateDependencyReport() + '\n');
 
 const { Client, GatewayIntentBits, Collection, Events, ActivityType, EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const fs = require('fs');
@@ -45,7 +33,6 @@ const client = new Client({
         GatewayIntentBits.GuildMessages, // For sending messages
         GatewayIntentBits.DirectMessages, // For receiving DMs
         GatewayIntentBits.MessageContent, // For reading message content (privileged - enable in Discord Developer Portal)
-        GatewayIntentBits.GuildVoiceStates, // For voice channel access
         // Add more intents below if needed:
         // GatewayIntentBits.GuildMembers, // For accessing member list (privileged - enable in Discord Developer Portal)
     ],
