@@ -18,8 +18,11 @@ WORKDIR /app
 # Copy package files
 COPY package.json ./
 
-# Install ALL dependencies (needed for sodium-native to compile)
-RUN npm install --no-package-lock
+# Set environment variable to ensure @discordjs/opus finds libsodium during build
+ENV PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig
+
+# Install dependencies (libsodium must be available for @discordjs/opus to compile with encryption support)
+RUN npm install --only=production --no-package-lock
 
 # Copy application files
 COPY . .

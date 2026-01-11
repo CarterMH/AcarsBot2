@@ -1,7 +1,6 @@
-// IMPORTANT: Load encryption libraries FIRST before any other voice-related modules
-require('sodium-native');
+// IMPORTANT: Load @discordjs/opus FIRST - it should automatically provide encryption support
 require('@discordjs/opus');
-console.log('✅ sodium-native and @discordjs/opus loaded successfully');
+console.log('✅ @discordjs/opus loaded successfully');
 
 const { Client, GatewayIntentBits, Collection, Events, ActivityType, EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const fs = require('fs');
