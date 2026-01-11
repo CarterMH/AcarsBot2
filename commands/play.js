@@ -1,9 +1,11 @@
 const { SlashCommandBuilder, ChannelType } = require('discord.js');
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
-const ffmpeg = require('ffmpeg-static');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+
+// Use system ffmpeg (installed via Alpine package manager)
+const ffmpegPath = 'ffmpeg';
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -50,7 +52,7 @@ module.exports = {
 
             // Create audio resource using FFmpeg to convert MP3 to Opus
             const resource = createAudioResource(
-                spawn(ffmpeg, [
+                spawn(ffmpegPath, [
                     '-i', resolvedPath,
                     '-f', 'opus',
                     '-ar', '48000',

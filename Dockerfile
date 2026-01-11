@@ -1,7 +1,7 @@
 # Use Node.js LTS version
 FROM node:20-alpine
 
-# Install build dependencies for native modules
+# Install build dependencies and ffmpeg for native modules
 RUN apk add --no-cache \
     python3 \
     make \
@@ -9,16 +9,17 @@ RUN apk add --no-cache \
     autoconf \
     automake \
     libtool \
-    nasm
+    nasm \
+    ffmpeg
 
 # Set working directory
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY package.json ./
 
-# Install dependencies
-RUN npm install --only=production
+# Install dependencies (ignore package-lock.json if out of sync)
+RUN npm install --only=production --no-package-lock
 
 # Copy application files
 COPY . .
