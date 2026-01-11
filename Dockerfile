@@ -11,7 +11,8 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production
+# Using npm install instead of npm ci to handle out-of-sync package-lock.json
+RUN npm install --only=production
 
 # Copy application files
 COPY . .
